@@ -1,0 +1,759 @@
+openapi: 3.1.0
+info:
+  title: 풀카운트 API
+  version: '0.1.0'
+  description: 업무 기능도와 단위 업무 기술서 기반 계약 초안. 아래 경로는 구현 예정이다.
+tags:
+  - { name: 선수 기록 }
+  - { name: 팀 기록 }
+  - { name: 경기 기록 }
+  - { name: 선수 비교 및 분석 }
+  - name: 관리자
+    description: 관리 화면을 도입할 경우의 API 초안이다. 접근 제어 방식은 구현 전에 확정한다.
+paths:
+  /api/players:
+    get:
+      tags: [선수 기록]
+      summary: 1.1 선수 검색
+      operationId: searchPlayers
+      description: 이름 부분 일치 검색. 여러 시즌에 해당하면 선수와 시즌별 소속 정보를 반환한다.
+      parameters:
+        - { name: name, in: query, required: true, schema: { type: string, minLength: 1 }, example: 김 }
+        - { name: season, in: query, schema: { $ref: '#/components/schemas/Season' }, example: 2024 }
+        - { $ref: '#/components/parameters/TeamFilter' }
+        - { name: position, in: query, schema: { $ref: '#/components/schemas/Position' } }
+      responses:
+        '200':
+          description: 선수 검색 결과. 일치하는 선수가 없으면 빈 배열.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PlayerSeason' } }
+              example:
+                - { playerId: sample-a, playerName: 김예시, birthDate: '2000-01-01', season: 2024, teamId: KIA, teamName: KIA, position: '3B' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/seasons/{year}/batting-stats:
+    get:
+      tags: [선수 기록]
+      summary: 1.2 타자 시즌 기록 조회
+      operationId: listSeasonBattingStats
+      description: 비율 지표 순위는 규정타석을 충족한 선수만 포함한다.
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+        - { $ref: '#/components/parameters/TeamFilter' }
+        - { $ref: '#/components/parameters/BattingSort' }
+        - { $ref: '#/components/parameters/Qualified' }
+      responses:
+        '200':
+          description: 조건에 맞는 타자 목록. 결과가 없으면 빈 배열.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/BatterRow' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/seasons/{year}/pitching-stats:
+    get:
+      tags: [선수 기록]
+      summary: 1.3 투수 시즌 기록 조회
+      operationId: listSeasonPitchingStats
+      description: ERA와 WHIP는 낮을수록 상위다. 비율 지표 순위에는 규정이닝 기준을 적용한다.
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+        - { $ref: '#/components/parameters/TeamFilter' }
+        - { $ref: '#/components/parameters/PitchingSort' }
+        - { $ref: '#/components/parameters/Qualified' }
+      responses:
+        '200':
+          description: 조건에 맞는 투수 목록. 결과가 없으면 빈 배열.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/PitcherRow' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/players/{playerId}/season-stats:
+    get:
+      tags: [선수 기록]
+      summary: 1.4 선수 연도별 추이 조회
+      operationId: getPlayerSeasonStats
+      description: 통산 비율은 2015년 이후 수록된 원천 기록의 합계로 다시 계산한다.
+      parameters:
+        - { $ref: '#/components/parameters/PlayerId' }
+        - { $ref: '#/components/parameters/StatType' }
+      responses:
+        '200':
+          description: 선수 기본 정보, 시즌별 기록과 통산 기록. 해당 유형 기록이 없으면 시즌 목록은 빈 배열, 통산은 null.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [player, type, seasons, career]
+                properties:
+                  player: { $ref: '#/components/schemas/Player' }
+                  type: { $ref: '#/components/schemas/StatType' }
+                  seasons:
+                    type: array
+                    items:
+                      anyOf:
+                        - { $ref: '#/components/schemas/BatterRow' }
+                        - { $ref: '#/components/schemas/PitcherRow' }
+                  career:
+                    anyOf:
+                      - { $ref: '#/components/schemas/BattingStats' }
+                      - { $ref: '#/components/schemas/PitchingStats' }
+                      - { type: 'null' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/seasons/{year}/standings:
+    get:
+      tags: [팀 기록]
+      summary: 시즌별 공식 팀 순위 조회
+      operationId: listOfficialStandings
+      description: 해당 시즌 마지막 공식 기준일의 KBO 발표 순위 순으로 반환한다. 승률은 0부터 1 사이 값이다.
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+      responses:
+        '200':
+          description: 공식 순위 목록. 결과가 없으면 빈 배열.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Standing' } }
+              example:
+                - { rank: 1, teamId: KIA, teamName: KIA, wins: 87, losses: 55, draws: 2, winningPct: 0.613, asOfDate: '2024-10-01' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/seasons/{year}/team-stats:
+    get:
+      tags: [팀 기록]
+      summary: 2.1 팀 시즌 성적 조회
+      operationId: listTeamSeasonStats
+      description: 선수 시즌 기록을 구단별로 집계한다. 승·패는 소속 투수 기록의 합계이며 비율은 팀 원천 기록 합계로 계산한다.
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [wins, losses, runs, homeRuns, stolenBases, avg, ops, runsAllowed, era, whip] }
+      responses:
+        '200':
+          description: 구단별 시즌 집계 목록. 결과가 없으면 빈 배열.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/TeamStats' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/seasons/{year}/teams/{teamId}/batting-stats:
+    get:
+      tags: [팀 기록]
+      summary: 2.2 팀 타격 통계 조회
+      operationId: getTeamBattingStats
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+        - { $ref: '#/components/parameters/TeamId' }
+        - { $ref: '#/components/parameters/BattingSort' }
+      responses:
+        '200':
+          description: 해당 구단의 선수별 타격 기록과 팀 합계. 선수 기록이 없으면 목록은 빈 배열, 합계는 null.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [players, totals]
+                properties:
+                  players: { type: array, items: { $ref: '#/components/schemas/BatterRow' } }
+                  totals:
+                    anyOf:
+                      - { $ref: '#/components/schemas/BattingStats' }
+                      - { type: 'null' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/seasons/{year}/teams/{teamId}/pitching-stats:
+    get:
+      tags: [팀 기록]
+      summary: 2.3 팀 투구 통계 조회
+      operationId: getTeamPitchingStats
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+        - { $ref: '#/components/parameters/TeamId' }
+        - { $ref: '#/components/parameters/PitchingSort' }
+      responses:
+        '200':
+          description: 해당 구단의 선수별 투구 기록과 팀 합계. 선수 기록이 없으면 목록은 빈 배열, 합계는 null.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [players, totals]
+                properties:
+                  players: { type: array, items: { $ref: '#/components/schemas/PitcherRow' } }
+                  totals:
+                    anyOf:
+                      - { $ref: '#/components/schemas/PitchingStats' }
+                      - { type: 'null' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/games:
+    get:
+      tags: [경기 기록]
+      summary: 3.1 경기 목록 조회
+      operationId: listGames
+      description: 현재 시드에는 종료 경기만 있다. 확인되지 않은 구장은 null로 반환한다.
+      parameters:
+        - { name: date, in: query, required: true, schema: { type: string, format: date }, example: '2024-10-01' }
+        - { $ref: '#/components/parameters/TeamFilter' }
+      responses:
+        '200':
+          description: 경기 목록. 경기 없는 날짜는 빈 배열.
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/Game' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/games/{gameId}:
+    get:
+      tags: [경기 기록]
+      summary: 3.2 경기 상세 조회
+      operationId: getGameDetail
+      description: 이닝별 점수와 선수별 경기 기록 확보 후 구현한다. 이닝 점수 합계는 최종 점수와 일치해야 한다.
+      parameters:
+        - { $ref: '#/components/parameters/GameId' }
+      responses:
+        '200':
+          description: 경기 정보와 이닝별·선수별 기록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameDetail' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/games/{gameId}/summary:
+    parameters:
+      - { $ref: '#/components/parameters/GameId' }
+    get:
+      tags: [경기 기록]
+      summary: 3.3 저장된 경기 요약 조회
+      operationId: getGameSummary
+      responses:
+        '200':
+          description: 저장된 요약
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameSummary' }
+        '404': { description: 경기 또는 저장된 요약이 없음 }
+    post:
+      tags: [경기 기록]
+      summary: 3.3 경기 주요 이슈 요약 생성
+      operationId: createGameSummary
+      description: 경기 상세 기록만을 근거로 요약을 생성하고 저장한다. 기존 요약이 있으면 재사용한다.
+      responses:
+        '200':
+          description: 생성했거나 이미 저장된 요약
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GameSummary' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { description: 요약 생성에 필요한 상세 기록 없음 }
+        '503': { description: 요약 생성 서비스 실패. 경기 상세 조회는 계속 가능하다. }
+  /api/games/{gameId}/events:
+    get:
+      tags: [경기 기록]
+      summary: 3.4 경기 리플레이 이벤트 조회 (확장)
+      operationId: listGameEvents
+      description: 이벤트 원본 확보 후 이닝·발생 순서대로 반환한다.
+      parameters:
+        - { $ref: '#/components/parameters/GameId' }
+      responses:
+        '200':
+          description: 이벤트 목록
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/GameEvent' } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/players/compare:
+    get:
+      tags: [선수 비교 및 분석]
+      summary: 4.1 선수 2인 비교
+      operationId: comparePlayers
+      description: 타자끼리 또는 투수끼리 비교한다. season 생략 시 2015년 이후 통산을 비교한다. ERA와 WHIP는 낮을수록 우위다.
+      parameters:
+        - { name: playerA, in: query, required: true, schema: { type: string, minLength: 1 }, example: sample-a }
+        - { name: playerB, in: query, required: true, schema: { type: string, minLength: 1 }, example: sample-b }
+        - { $ref: '#/components/parameters/StatType' }
+        - { name: season, in: query, schema: { $ref: '#/components/schemas/Season' }, example: 2024 }
+      responses:
+        '200':
+          description: 선수 정보와 항목별 비교 결과. 해당 시즌 기록이 없으면 hasRecord가 false이고 해당 값은 null.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Comparison' }
+              example:
+                type: batter
+                season: 2024
+                playerA: { playerId: sample-a, playerName: 김예시, hasRecord: true }
+                playerB: { playerId: sample-b, playerName: 박예시, hasRecord: true }
+                metrics:
+                  - { key: avg, playerA: 0.312, playerB: 0.287, better: A }
+                  - { key: homeRuns, playerA: 21, playerB: 24, better: B }
+                  - { key: runsBattedIn, playerA: 72, playerB: 72, better: tie }
+                  - { key: stolenBases, playerA: 17, playerB: 9, better: A }
+                  - { key: ops, playerA: 0.891, playerB: 0.846, better: A }
+        '400': { description: 잘못된 입력, 동일 선수 선택 또는 비교 유형 불일치 }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/players/{playerId}/similar-players:
+    get:
+      tags: [선수 비교 및 분석]
+      summary: 4.2 유사 선수 분석 (확장)
+      operationId: listSimilarPlayers
+      description: 같은 시즌·유형에서 기록이 비슷한 선수 최대 5명을 반환한다. 최소 표본과 유사도 산식은 팀 합의 후 확정한다.
+      parameters:
+        - { $ref: '#/components/parameters/PlayerId' }
+        - { $ref: '#/components/parameters/StatType' }
+        - { name: season, in: query, required: true, schema: { $ref: '#/components/schemas/Season' }, example: 2024 }
+      responses:
+        '200':
+          description: 유사 선수 목록
+          content:
+            application/json:
+              schema:
+                type: array
+                maxItems: 5
+                items:
+                  type: object
+                  required: [player, similarityPct]
+                  properties:
+                    player: { $ref: '#/components/schemas/Player' }
+                    similarityPct: { type: number, minimum: 0, maximum: 100 }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/seasons/{year}/matchup-predictions:
+    get:
+      tags: [선수 비교 및 분석]
+      summary: 4.3 승부 예측 (확장)
+      operationId: getMatchupPrediction
+      description: 팀 OPS와 ERA에 기반한 참고용 결과다. 판정 기준은 팀 합의 후 확정한다.
+      parameters:
+        - { $ref: '#/components/parameters/Year' }
+        - { name: teamA, in: query, required: true, schema: { type: string }, example: KIA }
+        - { name: teamB, in: query, required: true, schema: { type: string }, example: LG }
+      responses:
+        '200':
+          description: 우세 팀과 비교에 사용한 팀 지표
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [favoredTeamId, teams]
+                properties:
+                  favoredTeamId: { type: [string, 'null'], description: 동률 또는 판정 불가이면 null }
+                  teams: { type: array, minItems: 2, maxItems: 2, items: { $ref: '#/components/schemas/TeamStats' } }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/admin/imports:
+    post:
+      tags: [관리자]
+      summary: 5.1 시즌 기록 CSV 적재
+      operationId: importSeasonStats
+      description: 5.2 시즌별 구단명 매핑과 원천 기록 검증을 포함한다. CLI 적재만 제공할 경우 이 경로는 생략한다.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [battingCsv, pitchingCsv]
+              properties:
+                battingCsv: { type: string, format: binary }
+                pitchingCsv: { type: string, format: binary }
+      responses:
+        '200':
+          description: 적재 건수와 행별 오류
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [battingRowsImported, pitchingRowsImported, errors]
+                properties:
+                  battingRowsImported: { type: integer, minimum: 0 }
+                  pitchingRowsImported: { type: integer, minimum: 0 }
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      required: [file, row, message]
+                      properties:
+                        file: { type: string, enum: [battingCsv, pitchingCsv] }
+                        row: { type: integer, minimum: 1 }
+                        message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /api/admin/players/{playerId}/batting-stats/{year}:
+    patch:
+      tags: [관리자]
+      summary: 5.3 타자 시즌 기록 수정
+      operationId: updateBattingStats
+      parameters:
+        - { $ref: '#/components/parameters/PlayerId' }
+        - { $ref: '#/components/parameters/Year' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BattingUpdate' }
+            example: { homeRuns: 22 }
+      responses:
+        '200':
+          description: 검증 및 저장 후 기록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatterRow' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/admin/players/{playerId}/pitching-stats/{year}:
+    patch:
+      tags: [관리자]
+      summary: 5.3 투수 시즌 기록 수정
+      operationId: updatePitchingStats
+      parameters:
+        - { $ref: '#/components/parameters/PlayerId' }
+        - { $ref: '#/components/parameters/Year' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PitchingUpdate' }
+            example: { outsPitched: 432 }
+      responses:
+        '200':
+          description: 검증 및 저장 후 기록
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PitcherRow' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/admin/players:
+    post:
+      tags: [관리자]
+      summary: 5.4 선수 등록
+      operationId: createPlayer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreatePlayer' }
+            example: { playerId: sample-a, playerName: 김예시 }
+      responses:
+        '201':
+          description: 등록된 선수
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Player' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { description: 이미 등록된 선수 ID }
+  /api/admin/players/{playerId}:
+    patch:
+      tags: [관리자]
+      summary: 5.4 선수 기본 정보 수정
+      operationId: updatePlayer
+      parameters:
+        - { $ref: '#/components/parameters/PlayerId' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdatePlayer' }
+            example: { birthDate: '2000-01-01' }
+      responses:
+        '200':
+          description: 수정된 선수
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Player' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  parameters:
+    Year:
+      name: year
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Season' }
+      example: 2024
+    PlayerId:
+      name: playerId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+      example: sample-a
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    TeamId:
+      name: teamId
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+      example: KIA
+    TeamFilter:
+      name: teamId
+      in: query
+      schema: { type: string, minLength: 1 }
+      example: KIA
+    StatType:
+      name: type
+      in: query
+      required: true
+      schema: { $ref: '#/components/schemas/StatType' }
+      example: batter
+    Qualified:
+      name: qualified
+      in: query
+      description: 생략하면 규정 충족 여부로 필터링하지 않는다.
+      schema: { type: boolean }
+    BattingSort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [avg, homeRuns, runsBattedIn, stolenBases, ops] }
+    PitchingSort:
+      name: sort
+      in: query
+      schema: { type: string, enum: [wins, era, strikeouts, saves, whip] }
+  responses:
+    BadRequest: { description: 입력 형식·범위 또는 데이터 검증 규칙 위반 }
+    NotFound: { description: 요청한 리소스가 존재하지 않음 }
+  schemas:
+    Season: { type: integer, minimum: 2015, maximum: 2026 }
+    StatType: { type: string, enum: [batter, pitcher] }
+    Position: { type: [string, 'null'], enum: [P, C, '1B', '2B', '3B', SS, OF, DH, null] }
+    Count: { type: [integer, 'null'], minimum: 0 }
+    Rate: { type: [number, 'null'], minimum: 0 }
+    Team:
+      type: object
+      required: [teamId, teamName]
+      properties:
+        teamId: { type: string }
+        teamName: { type: string }
+    Standing:
+      allOf:
+        - { $ref: '#/components/schemas/Team' }
+        - type: object
+          required: [rank, wins, losses, draws, winningPct, asOfDate]
+          properties:
+            rank: { type: integer, minimum: 1 }
+            wins: { type: integer, minimum: 0 }
+            losses: { type: integer, minimum: 0 }
+            draws: { type: integer, minimum: 0 }
+            winningPct: { type: [number, 'null'], minimum: 0, maximum: 1 }
+            asOfDate: { type: string, format: date }
+    Player:
+      type: object
+      required: [playerId, playerName, birthDate]
+      properties:
+        playerId: { type: string }
+        playerName: { type: string }
+        birthDate: { type: [string, 'null'], format: date }
+        heightCm: { type: [number, 'null'], exclusiveMinimum: 0 }
+        weightKg: { type: [number, 'null'], exclusiveMinimum: 0 }
+        throwHand: { enum: [R, L, null] }
+        batHand: { enum: [R, L, S, null] }
+    PlayerSeason:
+      allOf:
+        - { $ref: '#/components/schemas/Player' }
+        - { $ref: '#/components/schemas/Team' }
+        - type: object
+          required: [season, position]
+          properties:
+            season: { $ref: '#/components/schemas/Season' }
+            position: { $ref: '#/components/schemas/Position' }
+    BattingCounts:
+      type: object
+      properties:
+        games: { $ref: '#/components/schemas/Count' }
+        plateAppearances: { $ref: '#/components/schemas/Count' }
+        atBats: { $ref: '#/components/schemas/Count' }
+        runs: { $ref: '#/components/schemas/Count' }
+        hits: { $ref: '#/components/schemas/Count' }
+        doubles: { $ref: '#/components/schemas/Count' }
+        triples: { $ref: '#/components/schemas/Count' }
+        homeRuns: { $ref: '#/components/schemas/Count' }
+        runsBattedIn: { $ref: '#/components/schemas/Count' }
+        stolenBases: { $ref: '#/components/schemas/Count' }
+        caughtStealing: { $ref: '#/components/schemas/Count' }
+        walks: { $ref: '#/components/schemas/Count' }
+        hitByPitch: { $ref: '#/components/schemas/Count' }
+        strikeouts: { $ref: '#/components/schemas/Count' }
+        sacrificeHits: { $ref: '#/components/schemas/Count' }
+        sacrificeFlies: { $ref: '#/components/schemas/Count' }
+        groundedIntoDoublePlays: { $ref: '#/components/schemas/Count' }
+    PitchingCounts:
+      type: object
+      properties:
+        games: { $ref: '#/components/schemas/Count' }
+        wins: { $ref: '#/components/schemas/Count' }
+        losses: { $ref: '#/components/schemas/Count' }
+        saves: { $ref: '#/components/schemas/Count' }
+        holds: { $ref: '#/components/schemas/Count' }
+        outsPitched: { $ref: '#/components/schemas/Count' }
+        hitsAllowed: { $ref: '#/components/schemas/Count' }
+        homeRunsAllowed: { $ref: '#/components/schemas/Count' }
+        walksAllowed: { $ref: '#/components/schemas/Count' }
+        hitBatters: { $ref: '#/components/schemas/Count' }
+        strikeouts: { $ref: '#/components/schemas/Count' }
+        runsAllowed: { $ref: '#/components/schemas/Count' }
+        earnedRuns: { $ref: '#/components/schemas/Count' }
+        battersFaced: { $ref: '#/components/schemas/Count' }
+    BattingStats:
+      allOf:
+        - { $ref: '#/components/schemas/BattingCounts' }
+        - type: object
+          properties:
+            avg: { $ref: '#/components/schemas/Rate' }
+            obp: { $ref: '#/components/schemas/Rate' }
+            slg: { $ref: '#/components/schemas/Rate' }
+            ops: { $ref: '#/components/schemas/Rate' }
+    PitchingStats:
+      allOf:
+        - { $ref: '#/components/schemas/PitchingCounts' }
+        - type: object
+          properties:
+            era: { $ref: '#/components/schemas/Rate' }
+            whip: { $ref: '#/components/schemas/Rate' }
+            winningPct: { type: [number, 'null'], minimum: 0, maximum: 1 }
+    BatterRow:
+      allOf:
+        - { $ref: '#/components/schemas/PlayerSeason' }
+        - { $ref: '#/components/schemas/BattingStats' }
+        - type: object
+          properties:
+            qualified: { type: [boolean, 'null'] }
+    PitcherRow:
+      allOf:
+        - { $ref: '#/components/schemas/PlayerSeason' }
+        - { $ref: '#/components/schemas/PitchingStats' }
+        - type: object
+          properties:
+            qualified: { type: [boolean, 'null'] }
+    TeamStats:
+      allOf:
+        - { $ref: '#/components/schemas/Team' }
+        - type: object
+          required: [wins, losses, runs, homeRuns, stolenBases, avg, ops, runsAllowed, era, whip]
+          properties:
+            wins: { $ref: '#/components/schemas/Count' }
+            losses: { $ref: '#/components/schemas/Count' }
+            runs: { $ref: '#/components/schemas/Count' }
+            homeRuns: { $ref: '#/components/schemas/Count' }
+            stolenBases: { $ref: '#/components/schemas/Count' }
+            avg: { $ref: '#/components/schemas/Rate' }
+            ops: { $ref: '#/components/schemas/Rate' }
+            runsAllowed: { $ref: '#/components/schemas/Count' }
+            era: { $ref: '#/components/schemas/Rate' }
+            whip: { $ref: '#/components/schemas/Rate' }
+    Game:
+      type: object
+      required: [gameId, date, homeTeam, awayTeam, homeScore, awayScore, stadium, status]
+      properties:
+        gameId: { type: string }
+        date: { type: string, format: date }
+        homeTeam: { $ref: '#/components/schemas/Team' }
+        awayTeam: { $ref: '#/components/schemas/Team' }
+        homeScore: { $ref: '#/components/schemas/Count' }
+        awayScore: { $ref: '#/components/schemas/Count' }
+        stadium: { type: [string, 'null'] }
+        status: { type: string, enum: [SCHEDULED, COMPLETED, CANCELLED, POSTPONED] }
+    GameDetail:
+      allOf:
+        - { $ref: '#/components/schemas/Game' }
+        - type: object
+          required: [inningScores, battingStats, pitchingStats]
+          properties:
+            inningScores:
+              type: array
+              items:
+                type: object
+                required: [inning, half, runs]
+                properties:
+                  inning: { type: integer, minimum: 1 }
+                  half: { type: string, enum: [T, B] }
+                  runs: { type: integer, minimum: 0 }
+            battingStats:
+              type: array
+              items:
+                allOf:
+                  - { $ref: '#/components/schemas/GamePlayer' }
+                  - { $ref: '#/components/schemas/BattingCounts' }
+            pitchingStats:
+              type: array
+              items:
+                allOf:
+                  - { $ref: '#/components/schemas/GamePlayer' }
+                  - { $ref: '#/components/schemas/PitchingCounts' }
+    GamePlayer:
+      type: object
+      required: [playerId, playerName, teamSide]
+      properties:
+        playerId: { type: string }
+        playerName: { type: string }
+        teamSide: { type: string, enum: [H, A] }
+    GameSummary:
+      type: object
+      required: [gameId, summary, generatedAt]
+      properties:
+        gameId: { type: string }
+        summary: { type: string }
+        generatedAt: { type: string, format: date-time }
+    GameEvent:
+      type: object
+      required: [sequence, inning, half, description]
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        inning: { type: integer, minimum: 1 }
+        half: { type: string, enum: [T, B] }
+        description: { type: string }
+    ComparedPlayer:
+      type: object
+      required: [playerId, playerName, hasRecord]
+      properties:
+        playerId: { type: string }
+        playerName: { type: string }
+        hasRecord: { type: boolean }
+    Comparison:
+      type: object
+      required: [type, season, playerA, playerB, metrics]
+      properties:
+        type: { $ref: '#/components/schemas/StatType' }
+        season: { type: [integer, 'null'], minimum: 2015, maximum: 2026, description: 통산 비교면 null }
+        playerA: { $ref: '#/components/schemas/ComparedPlayer' }
+        playerB: { $ref: '#/components/schemas/ComparedPlayer' }
+        metrics:
+          type: array
+          items:
+            type: object
+            required: [key, playerA, playerB, better]
+            properties:
+              key: { type: string, enum: [avg, homeRuns, runsBattedIn, stolenBases, ops, wins, era, strikeouts, saves, whip] }
+              playerA: { type: [number, 'null'] }
+              playerB: { type: [number, 'null'] }
+              better: { enum: [A, B, tie, null], description: 비교할 수 없으면 null }
+    BattingUpdate:
+      allOf:
+        - { $ref: '#/components/schemas/BattingCounts' }
+        - { type: object, minProperties: 1 }
+      unevaluatedProperties: false
+    PitchingUpdate:
+      allOf:
+        - { $ref: '#/components/schemas/PitchingCounts' }
+        - { type: object, minProperties: 1 }
+      unevaluatedProperties: false
+    PlayerFields:
+      type: object
+      properties:
+        playerName: { type: string, minLength: 1 }
+        birthDate: { type: [string, 'null'], format: date }
+        heightCm: { type: [number, 'null'], exclusiveMinimum: 0 }
+        weightKg: { type: [number, 'null'], exclusiveMinimum: 0 }
+        throwHand: { enum: [R, L, null] }
+        batHand: { enum: [R, L, S, null] }
+    CreatePlayer:
+      allOf:
+        - { $ref: '#/components/schemas/PlayerFields' }
+        - type: object
+          required: [playerId, playerName]
+          properties:
+            playerId: { type: string, minLength: 1 }
+      unevaluatedProperties: false
+    UpdatePlayer:
+      allOf:
+        - { $ref: '#/components/schemas/PlayerFields' }
+        - { type: object, minProperties: 1 }
+      unevaluatedProperties: false
