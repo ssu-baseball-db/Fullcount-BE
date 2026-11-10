@@ -28,6 +28,8 @@ python3 db/init.py
 
 DB 초기화는 최초 한 번 실행한다. 초기화 시 공식 팀 순위 120행, 종료 경기 8,640행과 외래 키를 확인한다. Spring Boot는 `data/fullcount.db`에 연결하고 스키마는 `db/`의 SQL로 관리한다. `ddl-auto=none`과 연결별 외래 키 검사를 적용한다.
 
+서버 실행 후 [Swagger UI](http://localhost:8080/swagger-ui/index.html)에서 API 계약 초안을 확인한다. 명세 원본은 [openapi.yaml](src/main/resources/static/openapi.yaml)에 있다.
+
 ---
 
 ## 3. 브랜치 전략
