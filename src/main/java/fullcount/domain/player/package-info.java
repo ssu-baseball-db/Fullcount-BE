@@ -1,0 +1,1 @@
+package fullcount.domain.player;
