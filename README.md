@@ -114,3 +114,5 @@ docs: 선수 비교 응답 예시 추가
 | DB | 기존 ERD의 `snake_case` 테이블·컬럼명을 유지하고 스키마 변경은 SQL에 반영한다 |
 | API | `/api` 아래에 두고 요청·응답 변경은 OpenAPI에 함께 반영한다 |
 | 테스트 | 테스트 클래스는 대상 이름에 `Test`를 붙이고, DB 조회는 SQLite에서 확인한다 |
+
+세부 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 참고한다.
