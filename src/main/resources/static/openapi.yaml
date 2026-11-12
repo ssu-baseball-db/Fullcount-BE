@@ -125,7 +125,7 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/Standing' } }
               example:
-                - { rank: 1, teamId: KIA, teamName: KIA, wins: 87, losses: 55, draws: 2, winningPct: 0.613, asOfDate: '2024-10-01' }
+                - { rank: 1, teamId: KIA, teamName: KIA, wins: 87, losses: 55, draws: 2, winningPct: 0.613, games: 144, gamesBehind: 0, asOfDate: '2024-10-01' }
         '400': { $ref: '#/components/responses/BadRequest' }
   /api/seasons/{year}/team-stats:
     get:
@@ -540,13 +540,19 @@ components:
     BattingSort:
       name: sort
       in: query
+      description: 모든 타격 정렬 항목은 값이 높은 순으로 반환한다.
       schema: { type: string, enum: [avg, obp, slg, ops, homeRuns, runsBattedIn, stolenBases] }
     PitchingSort:
       name: sort
       in: query
+      description: ERA와 WHIP는 값이 낮은 순으로, 승·탈삼진·세이브는 값이 높은 순으로 반환한다.
       schema: { type: string, enum: [wins, era, strikeouts, saves, whip] }
   responses:
-    BadRequest: { description: 입력 형식·범위 또는 데이터 검증 규칙 위반 }
+    BadRequest:
+      description: 입력 형식·범위 또는 데이터 검증 규칙 위반
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorMessage' }
     InvalidRecord:
       description: 입력 형식·범위 또는 기록 검증 규칙 위반. 위반 내용을 반환한다.
       content:
@@ -557,8 +563,17 @@ components:
             properties:
               message: { type: string }
           example: { message: 타수는 타석 이하여야 합니다. }
-    NotFound: { description: 요청한 리소스가 존재하지 않음 }
+    NotFound:
+      description: 요청한 리소스가 존재하지 않음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorMessage' }
   schemas:
+    ErrorMessage:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
     Season: { type: integer, minimum: 2015, maximum: 2026 }
     StatType: { type: string, enum: [batter, pitcher] }
     Position: { type: [string, 'null'], enum: [P, C, '1B', '2B', '3B', SS, OF, DH, null], description: 외야수는 OF로 통합한다. }
@@ -574,7 +589,7 @@ components:
       allOf:
         - { $ref: '#/components/schemas/Team' }
         - type: object
-          required: [rank, wins, losses, draws, winningPct, asOfDate]
+          required: [rank, wins, losses, draws, winningPct, asOfDate, games, gamesBehind]
           properties:
             rank: { type: integer, minimum: 1 }
             wins: { type: integer, minimum: 0 }
@@ -582,6 +597,8 @@ components:
             draws: { type: integer, minimum: 0 }
             winningPct: { type: [number, 'null'], minimum: 0, maximum: 1 }
             asOfDate: { type: string, format: date }
+            games: { type: integer, minimum: 0 }
+            gamesBehind: { type: [number, 'null'], minimum: 0 }
     Player:
       type: object
       required: [playerId, playerName, birthDate]
