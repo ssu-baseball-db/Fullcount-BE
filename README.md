@@ -28,7 +28,13 @@ python3 db/init.py
 
 DB 초기화는 최초 한 번 실행한다. 초기화 시 공식 팀 순위 120행, 종료 경기 8,640행과 외래 키를 확인한다. Spring Boot는 `data/fullcount.db`에 연결하고 스키마는 `db/`의 SQL로 관리한다. `ddl-auto=none`과 연결별 외래 키 검사를 적용한다.
 
-서버 실행 후 [Swagger UI](http://localhost:8080/swagger-ui/index.html)에서 API 계약 초안을 확인한다. 명세 원본은 [openapi.yaml](src/main/resources/static/openapi.yaml)에 있다.
+서버 실행 후 [Swagger UI](http://localhost:8080/swagger-ui/index.html)에서 API를 확인한다. 명세 원본은 [openapi.yaml](src/main/resources/static/openapi.yaml)에 있다.
+
+### 선수 기록과 경기 상세 데이터
+
+시즌 기록은 `FULLCOUNT_ADMIN_TOKEN`을 설정한 뒤 Swagger의 관리자 인증을 통해 `POST /api/admin/imports`로 넣는다. UTF-8 타자·투수 CSV를 각각 `battingCsv`, `pitchingCsv`로 보낸다. 필수 헤더는 `playerId,playerName,season,team`이며, 기록 헤더는 명세의 원천 필드 이름 또는 `PA`, `HR`, `IP`처럼 지원되는 약어를 사용한다. 오류 행은 롤백되고 파일별 성공 건수와 오류 행 번호가 반환된다.
+
+경기 이닝별 점수, 선수별 기록, 이벤트는 초기 시드에 없다. 상세·이벤트 API는 해당 데이터가 저장되면 반환한다. 경기 요약 생성에는 상세 데이터와 `FULLCOUNT_SUMMARY_URL`이 필요하다. 지정한 서비스는 `{ "instructions": "...", "game": {...} }`를 받아 `{ "summary": "..." }`를 반환해야 한다. 인증이 필요한 경우 `FULLCOUNT_SUMMARY_TOKEN`을 설정한다.
 
 ---
 
