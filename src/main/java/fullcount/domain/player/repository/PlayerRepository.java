@@ -29,7 +29,7 @@ public class PlayerRepository {
 
   public Map<String, Object> findPlayer(String playerId) {
     return jdbc.sql("SELECT " + PLAYER_FIELDS + " FROM player p WHERE p.player_id=:id")
-        .param("id", playerId).query().optionalRow()
+        .param("id", playerId).query().listOfRows().stream().findFirst()
         .orElseThrow(() -> ApiErrors.missing("선수를 찾을 수 없습니다."));
   }
 

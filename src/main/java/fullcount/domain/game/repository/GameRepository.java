@@ -38,7 +38,7 @@ public class GameRepository {
   }
 
   public Map<String, Object> findGame(String id) {
-    return jdbc.sql(GAMES + " WHERE g.game_id=:id").param("id", id).query().optionalRow()
+    return jdbc.sql(GAMES + " WHERE g.game_id=:id").param("id", id).query().listOfRows().stream().findFirst()
         .map(this::gameResponse).orElseThrow(() -> ApiErrors.missing("경기를 찾을 수 없습니다."));
   }
 
@@ -66,7 +66,7 @@ public class GameRepository {
         SELECT game_id AS gameId, summary_text AS summary,
                strftime('%Y-%m-%dT%H:%M:%SZ',generated_at) AS generatedAt
         FROM game_summary WHERE game_id=:id
-        """).param("id", id).query().optionalRow();
+        """).param("id", id).query().listOfRows().stream().findFirst();
   }
 
   public void saveSummary(String id, String summary) {
