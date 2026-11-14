@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class GameRepository {
@@ -74,6 +75,42 @@ public class GameRepository {
         INSERT INTO game_summary(game_id,summary_text,model_name,generated_at)
         VALUES (:id,:summary,'configured-provider',:time) ON CONFLICT(game_id) DO NOTHING
         """).param("id", id).param("summary", summary).param("time", Instant.now().toString()).update();
+  }
+
+  @Transactional
+  public void saveDetail(GameDetailSource detail) {
+    String id = detail.gameId();
+    for (GameDetailSource.Inning score : detail.inningScores()) {
+      jdbc.sql("""
+          INSERT INTO inning_score(game_id, inning_no, half, runs) VALUES (:id,:inning,:half,:runs)
+          ON CONFLICT(game_id, inning_no, half) DO UPDATE SET runs=excluded.runs
+          """).param("id", id).param("inning", score.inning()).param("half", score.half())
+          .param("runs", score.runs()).update();
+    }
+    savePlayerLines(id, StatType.BATTER, detail.battingStats());
+    savePlayerLines(id, StatType.PITCHER, detail.pitchingStats());
+    for (GameDetailSource.Event event : detail.events()) {
+      jdbc.sql("""
+          INSERT INTO game_event(game_id, sequence, inning_no, half, description)
+          VALUES (:id,:sequence,:inning,:half,:description)
+          ON CONFLICT(game_id, sequence) DO UPDATE
+          SET inning_no=excluded.inning_no, half=excluded.half, description=excluded.description
+          """).param("id", id).param("sequence", event.sequence()).param("inning", event.inning())
+          .param("half", event.half()).param("description", event.description()).update();
+    }
+  }
+
+  private void savePlayerLines(String id, StatType type, List<GameDetailSource.PlayerLine> lines) {
+    String table = type == StatType.BATTER ? "batter_game" : "pitcher_game";
+    String columns = type.counts.stream().map(StatType::column).collect(Collectors.joining(", "));
+    String bindings = type.counts.stream().map(field -> ":" + field).collect(Collectors.joining(", "));
+    for (GameDetailSource.PlayerLine line : lines) {
+      Map<String, Object> values = new LinkedHashMap<>();
+      for (String field : type.counts) values.put(field, line.stats().get(field));
+      jdbc.sql("INSERT INTO " + table + "(game_id, player_id, team_side, " + columns + ")"
+          + " VALUES (:id,:playerId,:side," + bindings + ") ON CONFLICT(game_id, player_id) DO NOTHING")
+          .params(values).param("id", id).param("playerId", line.playerId()).param("side", line.teamSide()).update();
+    }
   }
 
   private List<Map<String, Object>> findPlayerStats(String id, StatType type) {

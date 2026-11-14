@@ -249,7 +249,8 @@ paths:
       summary: 3.3 경기 주요 이슈 요약 생성
       operationId: createGameSummary
       description: >-
-        저장된 요약을 먼저 확인하고, 없으면 경기 기록에 있는 사실만 사용해 AI 요약을 생성·저장한다.
+        종료 경기의 저장된 요약을 먼저 확인한다. 요약과 상세 기록이 없으면 설정된 제공처에서 해당 경기만 가져와 저장한다.
+        이닝별 점수, 타격·투구 기록, 저장된 주요 이벤트를 AI 서비스에 보내 요약을 생성·저장한다.
         상세 화면은 반환된 요약을 경기 기록과 함께 표시한다. 생성에 실패하면 경기 기록만 표시한다.
       responses:
         '200':
@@ -258,8 +259,8 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/GameSummary' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: 요약 생성에 필요한 상세 기록 없음 }
-        '503': { description: 요약 생성 서비스 실패. 경기 상세 조회는 계속 가능하다. }
+        '409': { description: 미종료 경기, 생성 중인 경기 또는 상세 기록을 구할 수 없음 }
+        '503': { description: 상세 기록 제공처 또는 요약 서비스 오류. 경기 상세 조회는 계속 가능하다. }
   /api/games/{gameId}/events:
     get:
       tags: [경기 기록]
