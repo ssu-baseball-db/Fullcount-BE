@@ -28,7 +28,28 @@ python3 db/init.py
 
 DB 초기화는 최초 한 번 실행한다. 초기화 시 공식 팀 순위 120행, 종료 경기 8,640행과 외래 키를 확인한다. Spring Boot는 `data/fullcount.db`에 연결하고 스키마는 `db/`의 SQL로 관리한다. `ddl-auto=none`과 연결별 외래 키 검사를 적용한다.
 
-서버 실행 후 [Swagger UI](http://localhost:8080/swagger-ui/index.html)에서 API 계약 초안을 확인한다. 명세 원본은 [openapi.yaml](src/main/resources/static/openapi.yaml)에 있다.
+서버 실행 후 [Swagger UI](http://localhost:8080/swagger-ui/index.html)에서 API를 확인한다. 명세 원본은 [openapi.yaml](src/main/resources/static/openapi.yaml)에 있다.
+
+### 선수 기록과 경기 상세 데이터
+
+시즌 기록은 `FULLCOUNT_ADMIN_TOKEN`을 설정한 뒤 Swagger의 관리자 인증을 통해 `POST /api/admin/imports`로 넣는다. UTF-8 타자·투수 CSV를 각각 `battingCsv`, `pitchingCsv`로 보낸다. 필수 헤더는 `playerId,playerName,season,team`이며, 기록 헤더는 명세의 원천 필드 이름 또는 `PA`, `HR`, `IP`처럼 지원되는 약어를 사용한다. 오류 행은 롤백되고 파일별 성공 건수와 오류 행 번호가 반환된다.
+
+#### 경기 요약 로컬 테스트
+
+팀 노션에서 받은 `fullcount.db`를 백엔드 루트의 `data/fullcount.db`에 배치한다. JDK 21, Python 3, Ollama가 필요하다. Ollama를 기본 주소 `127.0.0.1:11434`에서 실행하고 `ollama pull qwen2.5:1.5b`로 모델을 받는다. 첫 실행 전에 `ollama run qwen2.5:1.5b "안녕"`으로 모델을 준비하면 생성 타임아웃을 줄일 수 있다.
+
+터미널을 각각 열어 백엔드 루트에서 실행한다.
+
+```bash
+python3 db/game_detail_source.py data/fullcount.db
+python3 db/ollama_summary.py
+FULLCOUNT_GAME_DETAIL_URL='http://127.0.0.1:18085/games/{gameId}' \
+FULLCOUNT_SUMMARY_URL=http://127.0.0.1:18086/summary ./gradlew bootRun
+```
+
+프론트 `feat/3-games-pages`에서 `VITE_USE_MOCK=false npm run dev`로 실행하고 `http://localhost:5173/games/20240323LTSK0`을 연다. **AI 요약 만들기**를 누르면 이닝 점수, 선수 기록, 주요 이벤트와 요약이 표시된다. 새로고침 후 저장된 요약을 다시 확인한다. 이 경기의 확인 기준은 SSG 5–3 승리와 3회말 최정의 결승 홈런이다. 로컬 소형 모델의 출력은 원본 경기 기록과 대조한다.
+
+[경기 요약 구현과 제공처 명세](docs/game-summary.md)
 
 ---
 
