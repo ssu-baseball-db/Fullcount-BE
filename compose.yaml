@@ -53,6 +53,8 @@ services:
   ollama:
     image: ollama/ollama:latest
     restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: "-1"
     volumes:
       - ${FULLCOUNT_OLLAMA_DIR:-./data/ollama}:/root/.ollama
 networks:
