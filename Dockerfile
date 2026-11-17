@@ -9,3 +9,5 @@ FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar /app/fullcount.jar
 ENTRYPOINT ["java", "-jar", "/app/fullcount.jar"]
+COPY compose.yaml /release/compose.yaml
+COPY db/game_detail_source.py db/ollama_summary.py db/sql_preview.py /release/db/

@@ -1,0 +1,61 @@
+name: Deploy backend to EC2
+
+on:
+  push:
+    branches: [feat/6-admin-login-deployment]
+    paths: [.github/workflows/deploy-ec2.yml]
+  workflow_dispatch:
+    inputs:
+      keep_running:
+        description: 배포 성공 후 EC2를 켜 둡니다.
+        type: boolean
+        default: false
+
+concurrency:
+  group: fullcount-ec2
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ec2-first-run]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: ec2-test
+    env:
+      AWS_REGION: ap-northeast-2
+      AWS_PAGER: ""
+      EC2_INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: 이미지 빌드 및 ECR 업로드
+        id: image
+        run: |
+          : "${EC2_INSTANCE_ID:?Set EC2_INSTANCE_ID in ec2-test}"
+          : "${ECR_REPOSITORY:?Set ECR_REPOSITORY in ec2-test}"
+          repository="$(aws ecr describe-repositories --repository-names "$ECR_REPOSITORY" --query 'repositories[0].repositoryUri' --output text)"
+          registry="${repository%%/*}"
+          tag="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image="$repository:$tag"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$registry"
+          trap 'docker logout "$registry" >/dev/null' EXIT
+          docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$image" .
+          docker push "$image"
+          digest="$(aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids "imageTag=$tag" --query 'imageDetails[0].imageDigest' --output text)"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          printf 'ref=%s@%s\n' "$repository" "$digest" >> "$GITHUB_OUTPUT"
+      - name: EC2 배포 및 팀 순위 확인
+        env:
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+          KEEP_RUNNING: ${{ inputs.keep_running }}
+        run: bash deploy/run-ec2.sh

@@ -6,3 +6,8 @@
 !gradle/**
 !src/
 !src/**
+!compose.yaml
+!db/
+!db/game_detail_source.py
+!db/ollama_summary.py
+!db/sql_preview.py

@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Fullcount GitHub Actions deployment permissions and private ECR repository
+Parameters:
+  ExistingInstanceId:
+    Type: AWS::EC2::Instance::Id
+  ExistingInstanceRole:
+    Type: String
+    Description: IAM role name attached to the Fullcount EC2 instance profile
+  GitHubSubject:
+    Type: String
+    Default: repo:ssu-baseball-db/Fullcount-BE:environment:ec2-test
+    Description: Exact GitHub OIDC subject for the restricted deployment environment
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: fullcount-be
+      ImageTagMutability: IMMUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: '{"rules":[{"rulePriority":1,"description":"Keep 10 images","selection":{"tagStatus":"any","countType":"imageCountMoreThan","countNumber":10},"action":{"type":"expire"}}]}'
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubSubject
+      Policies:
+        - PolicyName: DeployFullcount
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ['ec2:DescribeInstances', 'ecr:GetAuthorizationToken', 'ssm:DescribeInstanceInformation', 'ssm:GetCommandInvocation', 'ssm:CancelCommand']
+                Resource: '*'
+              - Effect: Allow
+                Action: ['ec2:StartInstances', 'ec2:StopInstances']
+                Resource: !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${ExistingInstanceId}
+              - Effect: Allow
+                Action: ssm:SendCommand
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}::document/AWS-RunShellScript
+                  - !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${ExistingInstanceId}
+              - Effect: Allow
+                Action: ['ecr:DescribeRepositories', 'ecr:DescribeImages', 'ecr:BatchCheckLayerAvailability', 'ecr:InitiateLayerUpload', 'ecr:UploadLayerPart', 'ecr:CompleteLayerUpload', 'ecr:PutImage']
+                Resource: !GetAtt Repository.Arn
+  InstancePullPolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: PullFullcountImage
+      Roles: [!Ref ExistingInstanceRole]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: ecr:GetAuthorizationToken
+            Resource: '*'
+          - Effect: Allow
+            Action: ['ecr:BatchCheckLayerAvailability', 'ecr:BatchGetImage', 'ecr:GetDownloadUrlForLayer']
+            Resource: !GetAtt Repository.Arn
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt DeployRole.Arn
+  EcrRepository:
+    Value: !Ref Repository
