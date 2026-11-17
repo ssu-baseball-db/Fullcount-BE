@@ -110,6 +110,7 @@ def detail(db, game_id):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("database")
+    parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18085)
     args = parser.parse_args()
     from pathlib import Path
@@ -138,7 +139,7 @@ def main():
             self.end_headers()
             self.wfile.write(body)
 
-    HTTPServer(("127.0.0.1", args.port), Handler).serve_forever()
+    HTTPServer((args.bind, args.port), Handler).serve_forever()
 
 
 if __name__ == "__main__":

@@ -47,9 +47,13 @@ FULLCOUNT_GAME_DETAIL_URL='http://127.0.0.1:18085/games/{gameId}' \
 FULLCOUNT_SUMMARY_URL=http://127.0.0.1:18086/summary ./gradlew bootRun
 ```
 
-프론트 `feat/3-games-pages`에서 `VITE_USE_MOCK=false npm run dev`로 실행하고 `http://localhost:5173/games/20240323LTSK0`을 연다. **AI 요약 만들기**를 누르면 이닝 점수, 선수 기록, 주요 이벤트와 요약이 표시된다. 새로고침 후 저장된 요약을 다시 확인한다. 이 경기의 확인 기준은 SSG 5–3 승리와 3회말 최정의 결승 홈런이다. 로컬 소형 모델의 출력은 원본 경기 기록과 대조한다.
+프론트 `feat/3-games-pages`에서 `VITE_USE_MOCK=false npm run dev`로 실행하고 `http://localhost:5173/games/20240323LTSK0`을 연다. **AI 요약 만들기**를 누르면 이닝 점수, 선수 기록과 요약이 표시된다. 새로고침 후 저장된 요약을 다시 확인한다. 이 경기의 확인 기준은 SSG 5–3 승리와 3회말 최정의 결승 홈런이다. 로컬 소형 모델의 출력은 원본 경기 기록과 대조한다.
 
 [경기 요약 구현과 제공처 명세](docs/game-summary.md)
+
+[관리자 로그인과 SQL 시연 실행 안내](docs/admin-demo.md)
+
+[Docker Compose와 EC2 배포 안내](docs/ec2-deploy.md)
 
 ---
 

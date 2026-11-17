@@ -1,0 +1,58 @@
+services:
+  api:
+    image: fullcount-api:${FULLCOUNT_IMAGE_TAG:-local}
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${FULLCOUNT_HTTP_PORT:-8080}:8080"
+    environment:
+      FULLCOUNT_ADMIN_USERNAME: ${FULLCOUNT_ADMIN_USERNAME:?Set the admin username}
+      FULLCOUNT_ADMIN_PASSWORD_HASH: ${FULLCOUNT_ADMIN_PASSWORD_HASH:?Set the admin password hash}
+      FULLCOUNT_ADMIN_TOKEN: ${FULLCOUNT_ADMIN_TOKEN:-}
+      FULLCOUNT_GAME_DETAIL_URL: http://game-detail:18085/games/{gameId}
+      FULLCOUNT_SUMMARY_URL: ${FULLCOUNT_SUMMARY_URL:-http://summary:18086/summary}
+      FULLCOUNT_SQL_PREVIEW_URL: http://sql-preview:18087/preview
+    volumes:
+      - ${FULLCOUNT_DATA_DIR:-./data}:/app/data
+    networks:
+      - default
+      - sql-preview
+  sql-preview:
+    image: python:3.13-slim
+    command: ["python", "/app/sql_preview.py", "/demo/fullcount-demo.db"]
+    restart: unless-stopped
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    pids_limit: 32
+    volumes:
+      - ./db/sql_preview.py:/app/sql_preview.py:ro
+      - ${FULLCOUNT_DATA_DIR:-./data}/fullcount-demo.db:/demo/fullcount-demo.db:ro
+    networks:
+      - sql-preview
+  game-detail:
+    image: python:3.13-slim
+    command: ["python", "/app/game_detail_source.py", "/data/fullcount.db", "--bind", "0.0.0.0"]
+    restart: unless-stopped
+    volumes:
+      - ./db/game_detail_source.py:/app/game_detail_source.py:ro
+      - ${FULLCOUNT_DATA_DIR:-./data}:/data:ro
+  summary:
+    image: python:3.13-slim
+    command: ["python", "/app/ollama_summary.py"]
+    restart: unless-stopped
+    environment:
+      SUMMARY_BIND: 0.0.0.0
+      OLLAMA_CHAT_URL: http://ollama:11434/api/chat
+    volumes:
+      - ./db/ollama_summary.py:/app/ollama_summary.py:ro
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ${FULLCOUNT_OLLAMA_DIR:-./data/ollama}:/root/.ollama
+networks:
+  sql-preview:
+    internal: true

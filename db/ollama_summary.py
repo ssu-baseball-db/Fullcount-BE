@@ -1,7 +1,11 @@
 """Local Ollama adapter for the Fullcount summary API."""
 import json
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.request import Request, urlopen
+
+
+OLLAMA_URL = os.getenv("OLLAMA_CHAT_URL", "http://127.0.0.1:11434/api/chat")
 
 
 class SummaryHandler(BaseHTTPRequestHandler):
@@ -36,7 +40,7 @@ class SummaryHandler(BaseHTTPRequestHandler):
             body = json.dumps({"model": "qwen2.5:1.5b", "stream": False,
                                "messages": [{"role": "user", "content": prompt}],
                                "options": {"temperature": 0, "num_predict": 180}}).encode()
-            request = Request("http://127.0.0.1:11434/api/chat", data=body,
+            request = Request(OLLAMA_URL, data=body,
                               headers={"Content-Type": "application/json"})
             with urlopen(request, timeout=12) as response:
                 summary = json.load(response)["message"]["content"].strip()
@@ -55,4 +59,4 @@ class SummaryHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    HTTPServer(("127.0.0.1", 18086), SummaryHandler).serve_forever()
+    HTTPServer((os.getenv("SUMMARY_BIND", "127.0.0.1"), 18086), SummaryHandler).serve_forever()
