@@ -45,9 +45,4 @@ public class GameController {
   public Map<String, Object> createSummary(@PathVariable("gameId") String gameId) {
     return summaries.generate(gameId);
   }
-
-  @GetMapping("/{gameId}/events")
-  public List<Map<String, Object>> findEvents(@PathVariable("gameId") String gameId) {
-    return repository.findEvents(gameId);
-  }
 }
