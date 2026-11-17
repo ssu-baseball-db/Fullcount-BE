@@ -109,52 +109,6 @@ public class PlayerStatsService {
     return result;
   }
 
-  public List<Map<String, Object>> similar(String id, StatType type, int year) {
-    repository.findPlayer(id);
-    List<Map<String, Object>> rows = repository.findStats(type, year, null, null);
-    rows.forEach(row -> addSeasonMetrics(type, row));
-    List<Map<String, Object>> eligible = rows.stream().filter(row -> Boolean.TRUE.equals(row.get("qualified")))
-        .filter(row -> type.metrics.stream().allMatch(field -> row.get(field) != null)).toList();
-    Map<String, Object> target = eligible.stream().filter(row -> id.equals(row.get("playerId"))).findFirst().orElse(null);
-    if (target == null) return List.of();
-    Map<String, Double> deviations = new LinkedHashMap<>();
-    for (String key : type.metrics) {
-      double mean = eligible.stream().mapToDouble(row -> number(row, key).doubleValue()).average().orElseThrow();
-      double variance = eligible.stream().mapToDouble(row -> Math.pow(number(row, key).doubleValue() - mean, 2))
-          .average().orElseThrow();
-      deviations.put(key, Math.sqrt(variance));
-    }
-    return eligible.stream().filter(row -> !id.equals(row.get("playerId"))).map(row -> {
-      double distance = Math.sqrt(type.metrics.stream().mapToDouble(key -> {
-        double deviation = deviations.get(key);
-        return deviation == 0 ? 0 : Math.pow((number(row, key).doubleValue() - number(target, key).doubleValue()) / deviation, 2);
-      }).average().orElseThrow());
-      return Map.<String, Object>of("player", playerFields(row), "similarityPct", 100 / (1 + distance));
-    }).sorted(order("similarityPct", null)).limit(5).toList();
-  }
-
-  public Map<String, Object> predict(int year, String teamA, String teamB) {
-    if (teamA.equals(teamB)) throw ApiErrors.bad("서로 다른 두 구단을 선택해 주세요.");
-    List<Map<String, Object>> teams = findTeamStats(year, null);
-    Map<String, Object> first = requireTeam(teams, teamA);
-    Map<String, Object> second = requireTeam(teams, teamB);
-    String offense = better("ops", number(first, "ops"), number(second, "ops"));
-    String defense = better("era", number(first, "era"), number(second, "era"));
-    String favored = null;
-    if (offense != null && defense != null && (offense.equals(defense) || "tie".equals(offense) || "tie".equals(defense))) {
-      String winner = "tie".equals(offense) ? defense : offense;
-      favored = switch (winner) {
-        case "A" -> teamA;
-        case "B" -> teamB;
-        default -> null;
-      };
-    }
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("favoredTeamId", favored);
-    result.put("teams", List.of(first, second));
-    return result;
-  }
-
   public void addSeasonMetrics(StatType type, Map<String, Object> row) {
     addRates(type, row);
     Number amount = number(row, type.qualificationField);
@@ -233,7 +187,7 @@ public class PlayerStatsService {
       order = Comparator.comparing(row -> row.get(key) instanceof Number value ? value.doubleValue() : null,
           Comparator.nullsLast(direction));
     }
-    return tieField == null ? order : order.thenComparing(row -> (String) row.get(tieField));
+    return order.thenComparing(row -> (String) row.get(tieField));
   }
 
   private Map<String, Object> requireTeam(List<Map<String, Object>> teams, String id) {
@@ -251,13 +205,5 @@ public class PlayerStatsService {
 
   private Map<String, Object> comparedPlayer(Map<String, Object> player, boolean hasRecord) {
     return Map.of("playerId", player.get("playerId"), "playerName", player.get("playerName"), "hasRecord", hasRecord);
-  }
-
-  private Map<String, Object> playerFields(Map<String, Object> row) {
-    Map<String, Object> player = new LinkedHashMap<>();
-    for (String field : List.of("playerId", "playerName", "birthDate", "heightCm", "weightKg", "throwHand", "batHand")) {
-      player.put(field, row.get(field));
-    }
-    return player;
   }
 }

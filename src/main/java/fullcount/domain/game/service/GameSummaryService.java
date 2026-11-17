@@ -32,7 +32,8 @@ public class GameSummaryService {
     this.detailUrl = detailUrl;
     SimpleClientHttpRequestFactory requests = new SimpleClientHttpRequestFactory();
     requests.setConnectTimeout(Duration.ofSeconds(3));
-    requests.setReadTimeout(Duration.ofSeconds(15));
+    // 요약 서비스의 Ollama 대기(45초)보다 길고 Nginx proxy_read_timeout(60초)보다 짧게 둔다.
+    requests.setReadTimeout(Duration.ofSeconds(55));
     RestClient.Builder builder = RestClient.builder().requestFactory(requests);
     this.detailClient = builder.build();
     if (!token.isBlank()) builder.defaultHeaders(headers -> headers.setBearerAuth(token));

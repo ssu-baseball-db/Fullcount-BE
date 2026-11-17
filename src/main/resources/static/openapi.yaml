@@ -261,21 +261,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { description: 미종료 경기, 생성 중인 경기 또는 상세 기록을 구할 수 없음 }
         '503': { description: 상세 기록 제공처 또는 요약 서비스 오류. 경기 상세 조회는 계속 가능하다. }
-  /api/games/{gameId}/events:
-    get:
-      tags: [경기 기록]
-      summary: 3.4 경기 리플레이 이벤트 조회 (확장)
-      operationId: listGameEvents
-      description: 저장된 이벤트를 이닝·발생 순서대로 반환한다. 화면은 inning으로 이벤트를 묶어 이닝 단위로 이동한다.
-      parameters:
-        - { $ref: '#/components/parameters/GameId' }
-      responses:
-        '200':
-          description: 이벤트 목록
-          content:
-            application/json:
-              schema: { type: array, items: { $ref: '#/components/schemas/GameEvent' } }
-        '404': { $ref: '#/components/responses/NotFound' }
   /api/players/compare:
     get:
       tags: [선수 비교 및 분석]
@@ -310,62 +295,87 @@ paths:
                   - { key: ops, playerA: 0.891, playerB: 0.846, better: A }
         '400': { description: 잘못된 입력, 동일 선수 선택 또는 비교 유형 불일치 }
         '404': { $ref: '#/components/responses/NotFound' }
-  /api/players/{playerId}/similar-players:
+  /api/admin/session:
     get:
-      tags: [선수 비교 및 분석]
-      summary: 4.2 유사 선수 분석 (확장)
-      operationId: listSimilarPlayers
-      description: >-
-        같은 시즌·유형의 선수 중 최소 표본을 충족한 후보의 대표 지표를 표준화한 뒤 거리 오름차순으로 최대 5명을 반환한다.
-        최소 표본은 규정타석 또는 규정이닝이다. 유사도는 표준화한 지표 차이의 제곱평균제곱근 거리를 d로 두고 100 ÷ (1 + d)로 계산한다.
+      tags: [관리자]
+      summary: 관리자 로그인 상태와 CSRF 토큰 조회
+      responses:
+        '200': { description: authenticated 및 csrfToken 반환 }
+  /api/admin/login:
+    post:
+      tags: [관리자]
+      summary: 관리자 로그인
       parameters:
-        - { $ref: '#/components/parameters/PlayerId' }
-        - { $ref: '#/components/parameters/StatType' }
-        - { name: season, in: query, required: true, schema: { $ref: '#/components/schemas/Season' }, example: 2024 }
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string, format: password }
+      responses:
+        '200': { description: 세션 쿠키 발급 및 새 CSRF 토큰 반환 }
+        '401': { description: 계정 정보 불일치 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/logout:
+    post:
+      tags: [관리자]
+      summary: 관리자 로그아웃
+      security:
+        - AdminSession: []
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      responses:
+        '204': { description: 세션 폐기 }
+        '401': { description: 관리자 로그인 필요 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /api/admin/sql-preview:
+    post:
+      tags: [관리자]
+      summary: 시연용 SQLite에서 SQL 한 문장 실행
+      security:
+        - AdminSession: []
+      description: 관리자 세션 쿠키가 필요하다. 시연 DB 복제본의 변경은 요청 종료 시 폐기한다.
+      parameters:
+        - { name: X-CSRF-Token, in: header, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sql]
+              properties:
+                sql: { type: string, description: UTF-8 기준 최대 8KB }
       responses:
         '200':
-          description: 유사 선수 목록
-          content:
-            application/json:
-              schema:
-                type: array
-                maxItems: 5
-                items:
-                  type: object
-                  required: [player, similarityPct]
-                  properties:
-                    player: { $ref: '#/components/schemas/Player' }
-                    similarityPct: { type: number, minimum: 0, maximum: 100 }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /api/seasons/{year}/matchup-predictions:
-    get:
-      tags: [선수 비교 및 분석]
-      summary: 4.3 승부 예측 (확장)
-      operationId: getMatchupPrediction
-      description: 팀 OPS는 높을수록, ERA는 낮을수록 우세하다. 두 지표의 우세가 일치하거나 한 지표가 동률일 때만 우세 팀을 반환한다. 화면에 참고용임을 표시한다.
-      parameters:
-        - { $ref: '#/components/parameters/Year' }
-        - { name: teamA, in: query, required: true, schema: { type: string }, example: KIA }
-        - { name: teamB, in: query, required: true, schema: { type: string }, example: LG }
-      responses:
-        '200':
-          description: 우세 팀과 비교에 사용한 팀 지표
+          description: 조회 결과와 변경 행 수
           content:
             application/json:
               schema:
                 type: object
-                required: [favoredTeamId, teams]
                 properties:
-                  favoredTeamId: { type: [string, 'null'], description: 동률 또는 판정 불가이면 null }
-                  teams: { type: array, minItems: 2, maxItems: 2, items: { $ref: '#/components/schemas/TeamStats' } }
+                  columns: { type: array, items: { type: string } }
+                  rows: { type: array, maxItems: 100, items: { type: array, items: {} } }
+                  affectedRows: { type: [integer, 'null'] }
+                  truncated: { type: boolean }
         '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '401': { description: 관리자 로그인 필요 }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '408': { description: SQL 실행 시간 제한 초과 }
+        '422': { description: SQL 문법 오류 또는 허용 범위 및 제약조건 위반 }
+        '502': { description: SQL 시연 서비스 연결 실패 또는 잘못된 응답 }
+        '503': { description: SQL 시연 서비스 설정 누락 }
   /api/admin/imports:
     post:
       tags: [관리자]
       security:
         - AdminToken: []
+        - AdminSession: []
       summary: 5.1 시즌 기록 CSV 적재
       operationId: importSeasonStats
       description: >-
@@ -413,6 +423,7 @@ paths:
       tags: [관리자]
       security:
         - AdminToken: []
+        - AdminSession: []
       summary: 5.3 타자 시즌 기록 수정
       operationId: updateBattingStats
       description: >-
@@ -441,6 +452,7 @@ paths:
       tags: [관리자]
       security:
         - AdminToken: []
+        - AdminSession: []
       summary: 5.3 투수 시즌 기록 수정
       operationId: updatePitchingStats
       description: >-
@@ -469,6 +481,7 @@ paths:
       tags: [관리자]
       security:
         - AdminToken: []
+        - AdminSession: []
       summary: 5.4 선수 등록
       operationId: createPlayer
       description: 원본 선수 ID로 등록한다.
@@ -492,6 +505,7 @@ paths:
       tags: [관리자]
       security:
         - AdminToken: []
+        - AdminSession: []
       summary: 5.4 선수 기본 정보 수정
       operationId: updatePlayer
       description: 선수 기본 정보를 수정한다. 원본 선수 ID는 유지한다.
@@ -515,6 +529,11 @@ paths:
 components:
   securitySchemes:
     AdminToken: { type: http, scheme: bearer }
+    AdminSession:
+      type: apiKey
+      in: cookie
+      name: FULLCOUNT_SESSION
+      description: 세션으로 상태를 변경할 때 X-CSRF-Token 헤더가 필요하다.
   parameters:
     Year:
       name: year
@@ -779,14 +798,6 @@ components:
         gameId: { type: string }
         summary: { type: string }
         generatedAt: { type: string, format: date-time }
-    GameEvent:
-      type: object
-      required: [sequence, inning, half, description]
-      properties:
-        sequence: { type: integer, minimum: 1 }
-        inning: { type: integer, minimum: 1 }
-        half: { type: string, enum: [T, B] }
-        description: { type: string }
     ComparedPlayer:
       type: object
       required: [playerId, playerName, hasRecord]

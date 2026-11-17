@@ -1,7 +1,16 @@
 """Local Ollama adapter for the Fullcount summary API."""
 import json
+import os
+import threading
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from urllib.request import Request, urlopen
+
+
+OLLAMA_URL = os.getenv("OLLAMA_CHAT_URL", "http://127.0.0.1:11434/api/chat")
+MODEL = "qwen2.5:1.5b"
+# CPU 서버에서 모델 로딩과 생성에 10초 이상 걸릴 수 있다. 백엔드 대기(55초)와 Nginx(60초)보다 짧게 둔다.
+OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "45"))
 
 
 class SummaryHandler(BaseHTTPRequestHandler):
@@ -33,12 +42,12 @@ class SummaryHandler(BaseHTTPRequestHandler):
                 if line.get(metric) is not None:
                     facts.append(f"{line['playerName']} {line[metric]}{unit}")
             prompt = "다음 기록을 순서대로 한국어로 정리하세요. 이름, 이닝, 숫자를 바꾸거나 새로운 사실을 추가하지 마세요.\n" + "\n".join(facts)
-            body = json.dumps({"model": "qwen2.5:1.5b", "stream": False,
+            body = json.dumps({"model": MODEL, "stream": False, "keep_alive": -1,
                                "messages": [{"role": "user", "content": prompt}],
                                "options": {"temperature": 0, "num_predict": 180}}).encode()
-            request = Request("http://127.0.0.1:11434/api/chat", data=body,
+            request = Request(OLLAMA_URL, data=body,
                               headers={"Content-Type": "application/json"})
-            with urlopen(request, timeout=12) as response:
+            with urlopen(request, timeout=OLLAMA_TIMEOUT) as response:
                 summary = json.load(response)["message"]["content"].strip()
             if not summary:
                 raise ValueError("Ollama returned an empty summary")
@@ -54,5 +63,20 @@ class SummaryHandler(BaseHTTPRequestHandler):
         self.wfile.write(response_body)
 
 
+def warm_up():
+    """Load the model once at startup so the first summary request does not pay the loading time."""
+    body = json.dumps({"model": MODEL, "messages": [], "keep_alive": -1}).encode()
+    for _ in range(30):
+        try:
+            request = Request(OLLAMA_URL, data=body, headers={"Content-Type": "application/json"})
+            with urlopen(request, timeout=180):
+                print("Ollama model loaded", flush=True)
+                return
+        except OSError as error:
+            print(f"Ollama warm-up retry: {error}", flush=True)
+            time.sleep(10)
+
+
 if __name__ == "__main__":
-    HTTPServer(("127.0.0.1", 18086), SummaryHandler).serve_forever()
+    threading.Thread(target=warm_up, daemon=True).start()
+    HTTPServer((os.getenv("SUMMARY_BIND", "127.0.0.1"), 18086), SummaryHandler).serve_forever()
