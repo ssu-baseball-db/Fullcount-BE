@@ -20,7 +20,17 @@
    ```
 
 4. [관리자 비밀번호 해시 안내](admin-demo.md)에 따라 계정을 준비하고 `/opt/fullcount/.env`를 권한 `600`으로 저장한다. 필수값은 `FULLCOUNT_ADMIN_USERNAME`과 `FULLCOUNT_ADMIN_PASSWORD_HASH`다. `FULLCOUNT_DATA_DIR=/srv/fullcount/data`, `FULLCOUNT_OLLAMA_DIR=/srv/fullcount/ollama`, `FULLCOUNT_IMAGE_TAG=<백엔드 SHA>`도 지정한다. 이전 CLI·Swagger 도구를 사용할 경우에만 `FULLCOUNT_ADMIN_TOKEN`을 추가한다.
-5. `/opt/fullcount`에서 `sudo docker compose config --quiet`, `sudo docker compose up -d --build`, `sudo docker compose ps`를 실행한다. 모델은 `sudo docker compose exec -T ollama ollama pull qwen2.5:1.5b`로 받고, `sudo docker compose exec -T ollama ollama run qwen2.5:1.5b '안녕'`으로 첫 실행을 확인한다. `curl --fail http://127.0.0.1:8080/api/seasons/2024/standings`로 DB 연결을 확인한다.
+5. 첫 요약 요청 전에 프로젝트가 사용하는 경기 아카이브를 내려받는다. 다운로드에 성공하면 `.env`에 컨테이너 기준 경로인 `FULLCOUNT_GAME_ARCHIVE=/data/kbo.tar.gz`를 설정한다. 아카이브는 경기 요청이 들어왔을 때 읽으며 미리 DB에 적재할 필요는 없다.
+
+   ```bash
+   sudo curl --fail --location --retry 3 --max-time 180 \
+     https://raw.githubusercontent.com/team-datapopcorn/datapopcorn-assets/main/kbo-pitch-clock/data/raw_kbo_2019_2026.tar.gz \
+     --output /srv/fullcount/data/kbo.tar.gz.part
+   sudo tar -tzf /srv/fullcount/data/kbo.tar.gz.part >/dev/null &&
+     sudo mv /srv/fullcount/data/kbo.tar.gz.part /srv/fullcount/data/kbo.tar.gz
+   ```
+
+6. `/opt/fullcount`에서 `sudo docker compose config --quiet`, `sudo docker compose up -d --build`, `sudo docker compose ps`를 실행한다. 모델은 `sudo docker compose exec -T ollama ollama pull qwen2.5:1.5b`로 받고, `sudo docker compose exec -T ollama ollama run qwen2.5:1.5b '안녕'`으로 첫 실행을 확인한다. `curl --fail http://127.0.0.1:8080/api/seasons/2024/standings`로 DB 연결을 확인한다.
 
 ## 3. Elastic IP로 HTTPS 열기
 

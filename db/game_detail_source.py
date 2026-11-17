@@ -6,6 +6,8 @@ import gzip
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import io
 import json
+import os
+from pathlib import Path
 import re
 import sqlite3
 import tarfile
@@ -17,6 +19,9 @@ ARCHIVE = ("https://raw.githubusercontent.com/team-datapopcorn/datapopcorn-asset
 
 @cache
 def archive_bytes():
+    local_archive = os.getenv("FULLCOUNT_GAME_ARCHIVE")
+    if local_archive:
+        return Path(local_archive).read_bytes()
     with urlopen(ARCHIVE, timeout=10) as response:
         return response.read()
 
@@ -113,7 +118,6 @@ def main():
     parser.add_argument("--bind", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=18085)
     args = parser.parse_args()
-    from pathlib import Path
     database = Path(args.database).resolve().as_uri() + "?mode=ro"
 
     class Handler(BaseHTTPRequestHandler):

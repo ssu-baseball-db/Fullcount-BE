@@ -36,6 +36,8 @@ services:
     image: python:3.13-slim
     command: ["python", "/app/game_detail_source.py", "/data/fullcount.db", "--bind", "0.0.0.0"]
     restart: unless-stopped
+    environment:
+      FULLCOUNT_GAME_ARCHIVE: ${FULLCOUNT_GAME_ARCHIVE:-}
     volumes:
       - ./db/game_detail_source.py:/app/game_detail_source.py:ro
       - ${FULLCOUNT_DATA_DIR:-./data}:/data:ro
