@@ -8,7 +8,7 @@ Parameters:
     Description: IAM role name attached to the Fullcount EC2 instance profile
   GitHubSubject:
     Type: String
-    Default: repo:ssu-baseball-db/Fullcount-BE:environment:ec2-test
+    Default: repo:ssu-baseball-db@351830363/Fullcount-BE@1452170558:environment:ec2-test
     Description: Exact GitHub OIDC subject for the restricted deployment environment
 Resources:
   Repository:
@@ -43,7 +43,7 @@ Resources:
                 Action: ['ec2:DescribeInstances', 'ecr:GetAuthorizationToken', 'ssm:DescribeInstanceInformation', 'ssm:GetCommandInvocation', 'ssm:CancelCommand']
                 Resource: '*'
               - Effect: Allow
-                Action: ['ec2:StartInstances', 'ec2:StopInstances']
+                Action: ec2:StartInstances
                 Resource: !Sub arn:${AWS::Partition}:ec2:${AWS::Region}:${AWS::AccountId}:instance/${ExistingInstanceId}
               - Effect: Allow
                 Action: ssm:SendCommand

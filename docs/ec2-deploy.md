@@ -58,18 +58,18 @@
 
 발표용 EC2는 GitHub의 **Actions → Deploy backend to EC2 → Run workflow**에서 필요할 때 배포한다. 이 워크플로는 저장소 기본 브랜치에 들어가야 실행 메뉴가 표시된다. 검증한 배포 브랜치를 선택하면 해당 커밋으로 Linux amd64 이미지를 빌드하고, 비공개 ECR에 올린 뒤 다이제스트를 고정해 EC2에 배포한다.
 
-`main`에 반영하기 전 첫 배포 검증은 `feat/6-admin-login-deployment`에서 워크플로 파일을 변경하고 커밋 메시지에 `[ec2-first-run]`을 넣어 푸시하면 실행된다. 이 검증 실행의 `keep_running` 기본 동작은 중지다.
+`main`에 반영하기 전 첫 배포 검증은 `feat/6-admin-login-deployment`에서 워크플로 파일을 변경하고 커밋 메시지에 `[ec2-first-run]`을 넣어 푸시하면 실행된다.
 
 ### 최초 설정
 
 1. AWS IAM에 GitHub OIDC 제공자 `https://token.actions.githubusercontent.com`와 대상 `sts.amazonaws.com`을 등록한다. 이미 등록돼 있으면 사용한다. 서울 리전에서 [ec2-actions.yaml](../deploy/ec2-actions.yaml)로 별도 스택을 만들고, 풀카운트 인스턴스 ID와 그 인스턴스에 연결된 IAM 역할 이름을 넣는다. 새 EC2를 만드는 스택은 기존에 배포한 그대로 사용한다.
 2. GitHub 저장소에 `ec2-test` 환경을 만든다. **배포 승인 브랜치를 선택 모드로 제한**하고 팀이 검토한 브랜치만 허용한다. SSM 배포 역할은 해당 EC2에서 명령을 실행할 수 있으므로, PR의 임의 브랜치에 이 환경을 허용하지 않는다.
-3. 환경 변수에 `AWS_DEPLOY_ROLE_ARN`(스택 출력 `DeployRoleArn`), `ECR_REPOSITORY`(출력 `EcrRepository`), `EC2_INSTANCE_ID`(기존 인스턴스 ID)를 넣는다. AWS 액세스 키는 GitHub에 등록할 필요가 없다. 저장소가 사용자 지정 OIDC subject를 쓰면 IAM 스택의 `GitHubSubject`를 실제 subject에 맞춘다.
+3. 환경 변수에 `AWS_DEPLOY_ROLE_ARN`(스택 출력 `DeployRoleArn`), `ECR_REPOSITORY`(출력 `EcrRepository`), `EC2_INSTANCE_ID`(기존 인스턴스 ID)를 넣는다. AWS 액세스 키는 GitHub에 등록할 필요가 없다. IAM 스택의 `GitHubSubject`는 저장소와 소유자의 ID가 포함된 실제 OIDC subject와 일치해야 한다.
 4. EC2에 AWS CLI v2와 Docker Compose가 설치되어 있는지 확인한다. 기존 `/opt/fullcount/.env`, 서비스 SQLite DB, 시연 DB, 경기 아카이브와 모델 경로는 기존 배포 값을 사용한다.
 
 ### 실행 결과와 운영
 
 - 이미지와 함께 빌드된 Compose 설정과 Python 서비스를 EC2의 `/opt/fullcount/releases`에 풀고, 기존 `fullcount` Compose 프로젝트를 갱신한다. Nginx, 인증서, EBS 데이터와 서버 비밀값은 기존 경로를 사용한다.
 - 팀 순위 API가 실제 JSON을 반환하면 `/opt/fullcount/current`를 새 릴리스로 전환한다. 이 확인이 실패하거나 Compose 갱신이 실패하면 이전 릴리스의 이미지와 Compose 설정으로 돌아간다.
-- 인스턴스가 중지 상태였다면 워크플로가 켜고 결과 확인 후 다시 중지한다. Vercel Preview에서 바로 테스트할 때는 `keep_running`을 선택하고 테스트 후 EC2를 직접 중지한다. 시작할 때 이미 실행 중이던 인스턴스는 그대로 둔다. 워크플로를 강제 취소한 경우 AWS 콘솔에서 상태를 확인한다.
+- 인스턴스가 중지 상태이면 워크플로가 시작한다. 배포 성공·실패·취소 후에도 인스턴스는 켜져 있을 수 있다. 확인을 마치면 AWS에서 EC2를 별도로 중지하고 상태가 `stopped`인지 확인한다.
 - 배포 후 관리자 로그인과 새 경기 AI 요약은 별도 통합 테스트로 확인한다. 수동으로 Compose를 재실행할 때는 `/opt/fullcount/current`에 있는 기본 파일과 `compose.image.yaml`을 함께 사용하고, 환경 파일은 `/opt/fullcount/.env`를 지정한다.

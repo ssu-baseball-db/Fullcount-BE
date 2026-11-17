@@ -6,23 +6,13 @@ set -Eeuo pipefail
 : "${GITHUB_SHA:?}"
 : "${AWS_REGION:?}"
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-keep_running="${KEEP_RUNNING:-false}"
-started=false
-succeeded=false
 command_id=
 
 cleanup() {
   local status=$?
   trap - EXIT
-  if [[ -n "$command_id" && "$succeeded" != true ]]; then
+  if [[ -n "$command_id" ]]; then
     aws ssm cancel-command --command-id "$command_id" --instance-ids "$EC2_INSTANCE_ID" >/dev/null 2>&1 || true
-  fi
-  if [[ "$started" == true && ( "$succeeded" != true || "$keep_running" != true ) ]]; then
-    if ! aws ec2 stop-instances --instance-ids "$EC2_INSTANCE_ID" >/dev/null ||
-       ! aws ec2 wait instance-stopped --instance-ids "$EC2_INSTANCE_ID"; then
-      echo '::error::Could not confirm the instance is stopped. Check EC2 in the AWS console.'
-      status=1
-    fi
   fi
   exit "$status"
 }
@@ -34,7 +24,6 @@ trap 'exit 143' TERM
 state="$(aws ec2 describe-instances --instance-ids "$EC2_INSTANCE_ID" --query 'Reservations[0].Instances[0].State.Name' --output text)"
 case "$state" in
   stopped)
-    started=true
     aws ec2 start-instances --instance-ids "$EC2_INSTANCE_ID" >/dev/null
     aws ec2 wait instance-running --instance-ids "$EC2_INSTANCE_ID"
     ;;
@@ -68,7 +57,7 @@ for n in {1..130}; do
     Pending|InProgress|Delayed|Cancelling) sleep 5 ;;
     Success)
       jq -r .StandardOutputContent <<< "$invocation"
-      succeeded=true
+      command_id=
       exit 0
       ;;
     *)

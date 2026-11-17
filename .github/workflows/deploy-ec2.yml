@@ -5,11 +5,6 @@ on:
     branches: [feat/6-admin-login-deployment]
     paths: [.github/workflows/deploy-ec2.yml]
   workflow_dispatch:
-    inputs:
-      keep_running:
-        description: 배포 성공 후 EC2를 켜 둡니다.
-        type: boolean
-        default: false
 
 concurrency:
   group: fullcount-ec2
@@ -57,5 +52,4 @@ jobs:
       - name: EC2 배포 및 팀 순위 확인
         env:
           IMAGE_REF: ${{ steps.image.outputs.ref }}
-          KEEP_RUNNING: ${{ inputs.keep_running }}
         run: bash deploy/run-ec2.sh
