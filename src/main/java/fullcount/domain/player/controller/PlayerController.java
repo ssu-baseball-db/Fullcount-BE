@@ -47,10 +47,4 @@ public class PlayerController {
     if (season != null) ApiErrors.season(season);
     return stats.compare(playerA, playerB, StatType.parse(type), type, season);
   }
-
-  @GetMapping("/api/players/{playerId}/similar-players")
-  public List<Map<String, Object>> similar(@PathVariable("playerId") String playerId,
-      @RequestParam("type") String type, @RequestParam("season") int season) {
-    return stats.similar(playerId, StatType.parse(type), ApiErrors.season(season));
-  }
 }

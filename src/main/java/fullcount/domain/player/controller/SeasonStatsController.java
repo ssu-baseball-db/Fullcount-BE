@@ -42,12 +42,6 @@ public class SeasonStatsController {
     return stats.findTeamPlayers(statType(kind), ApiErrors.season(year), teamId, sort);
   }
 
-  @GetMapping("/matchup-predictions")
-  public Map<String, Object> predict(@PathVariable("year") int year,
-      @RequestParam("teamA") String teamA, @RequestParam("teamB") String teamB) {
-    return stats.predict(ApiErrors.season(year), teamA, teamB);
-  }
-
   private StatType statType(String kind) {
     return "pitching-stats".equals(kind) ? StatType.PITCHER : StatType.BATTER;
   }

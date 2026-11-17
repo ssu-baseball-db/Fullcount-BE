@@ -295,57 +295,6 @@ paths:
                   - { key: ops, playerA: 0.891, playerB: 0.846, better: A }
         '400': { description: 잘못된 입력, 동일 선수 선택 또는 비교 유형 불일치 }
         '404': { $ref: '#/components/responses/NotFound' }
-  /api/players/{playerId}/similar-players:
-    get:
-      tags: [선수 비교 및 분석]
-      summary: 4.2 유사 선수 분석 (확장)
-      operationId: listSimilarPlayers
-      description: >-
-        같은 시즌·유형의 선수 중 최소 표본을 충족한 후보의 대표 지표를 표준화한 뒤 거리 오름차순으로 최대 5명을 반환한다.
-        최소 표본은 규정타석 또는 규정이닝이다. 유사도는 표준화한 지표 차이의 제곱평균제곱근 거리를 d로 두고 100 ÷ (1 + d)로 계산한다.
-      parameters:
-        - { $ref: '#/components/parameters/PlayerId' }
-        - { $ref: '#/components/parameters/StatType' }
-        - { name: season, in: query, required: true, schema: { $ref: '#/components/schemas/Season' }, example: 2024 }
-      responses:
-        '200':
-          description: 유사 선수 목록
-          content:
-            application/json:
-              schema:
-                type: array
-                maxItems: 5
-                items:
-                  type: object
-                  required: [player, similarityPct]
-                  properties:
-                    player: { $ref: '#/components/schemas/Player' }
-                    similarityPct: { type: number, minimum: 0, maximum: 100 }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
-  /api/seasons/{year}/matchup-predictions:
-    get:
-      tags: [선수 비교 및 분석]
-      summary: 4.3 승부 예측 (확장)
-      operationId: getMatchupPrediction
-      description: 팀 OPS는 높을수록, ERA는 낮을수록 우세하다. 두 지표의 우세가 일치하거나 한 지표가 동률일 때만 우세 팀을 반환한다. 화면에 참고용임을 표시한다.
-      parameters:
-        - { $ref: '#/components/parameters/Year' }
-        - { name: teamA, in: query, required: true, schema: { type: string }, example: KIA }
-        - { name: teamB, in: query, required: true, schema: { type: string }, example: LG }
-      responses:
-        '200':
-          description: 우세 팀과 비교에 사용한 팀 지표
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [favoredTeamId, teams]
-                properties:
-                  favoredTeamId: { type: [string, 'null'], description: 동률 또는 판정 불가이면 null }
-                  teams: { type: array, minItems: 2, maxItems: 2, items: { $ref: '#/components/schemas/TeamStats' } }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
   /api/admin/session:
     get:
       tags: [관리자]
