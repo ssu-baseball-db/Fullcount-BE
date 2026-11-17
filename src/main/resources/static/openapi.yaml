@@ -2,14 +2,14 @@ openapi: 3.1.0
 info:
   title: 풀카운트 API
   version: '0.1.0'
-  description: 업무 기능도와 단위 업무 기술서 기반 계약 초안. 아래 경로는 구현 예정이다.
+  description: 업무 기능도와 단위 업무 기술서에 따른 풀카운트 API.
 tags:
   - { name: 선수 기록 }
   - { name: 팀 기록 }
   - { name: 경기 기록 }
   - { name: 선수 비교 및 분석 }
   - name: 관리자
-    description: 관리 화면을 도입할 경우의 API 초안이다. 접근 제어 방식은 구현 전에 확정한다.
+    description: 관리자 Bearer 토큰이 필요한 데이터 관리 API.
 paths:
   /api/players:
     get:
@@ -125,7 +125,7 @@ paths:
             application/json:
               schema: { type: array, items: { $ref: '#/components/schemas/Standing' } }
               example:
-                - { rank: 1, teamId: KIA, teamName: KIA, wins: 87, losses: 55, draws: 2, winningPct: 0.613, asOfDate: '2024-10-01' }
+                - { rank: 1, teamId: KIA, teamName: KIA, wins: 87, losses: 55, draws: 2, winningPct: 0.613, games: 144, gamesBehind: 0, asOfDate: '2024-10-01' }
         '400': { $ref: '#/components/responses/BadRequest' }
   /api/seasons/{year}/team-stats:
     get:
@@ -220,7 +220,7 @@ paths:
       tags: [경기 기록]
       summary: 3.2 경기 상세 조회
       operationId: getGameDetail
-      description: 이닝별 점수와 선수별 경기 기록 확보 후 구현한다. 이닝 점수 합계는 최종 점수와 일치해야 한다.
+      description: 이닝 점수 합계는 최종 점수와 일치해야 한다. 적재되지 않은 상세 기록의 목록은 빈 배열로 반환한다.
       parameters:
         - { $ref: '#/components/parameters/GameId' }
       responses:
@@ -249,7 +249,8 @@ paths:
       summary: 3.3 경기 주요 이슈 요약 생성
       operationId: createGameSummary
       description: >-
-        저장된 요약을 먼저 확인하고, 없으면 경기 기록에 있는 사실만 사용해 AI 요약을 생성·저장한다.
+        종료 경기의 저장된 요약을 먼저 확인한다. 요약과 상세 기록이 없으면 설정된 제공처에서 해당 경기만 가져와 저장한다.
+        이닝별 점수, 타격·투구 기록, 저장된 주요 이벤트를 AI 서비스에 보내 요약을 생성·저장한다.
         상세 화면은 반환된 요약을 경기 기록과 함께 표시한다. 생성에 실패하면 경기 기록만 표시한다.
       responses:
         '200':
@@ -258,14 +259,14 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/GameSummary' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { description: 요약 생성에 필요한 상세 기록 없음 }
-        '503': { description: 요약 생성 서비스 실패. 경기 상세 조회는 계속 가능하다. }
+        '409': { description: 미종료 경기, 생성 중인 경기 또는 상세 기록을 구할 수 없음 }
+        '503': { description: 상세 기록 제공처 또는 요약 서비스 오류. 경기 상세 조회는 계속 가능하다. }
   /api/games/{gameId}/events:
     get:
       tags: [경기 기록]
       summary: 3.4 경기 리플레이 이벤트 조회 (확장)
       operationId: listGameEvents
-      description: 이벤트 원본 확보 후 이닝·발생 순서대로 반환한다. 화면은 inning으로 이벤트를 묶어 이닝 단위로 이동한다.
+      description: 저장된 이벤트를 이닝·발생 순서대로 반환한다. 화면은 inning으로 이벤트를 묶어 이닝 단위로 이동한다.
       parameters:
         - { $ref: '#/components/parameters/GameId' }
       responses:
@@ -316,7 +317,7 @@ paths:
       operationId: listSimilarPlayers
       description: >-
         같은 시즌·유형의 선수 중 최소 표본을 충족한 후보의 대표 지표를 표준화한 뒤 거리 오름차순으로 최대 5명을 반환한다.
-        최소 표본과 유사도 산식은 팀 합의 후 확정한다.
+        최소 표본은 규정타석 또는 규정이닝이다. 유사도는 표준화한 지표 차이의 제곱평균제곱근 거리를 d로 두고 100 ÷ (1 + d)로 계산한다.
       parameters:
         - { $ref: '#/components/parameters/PlayerId' }
         - { $ref: '#/components/parameters/StatType' }
@@ -342,7 +343,7 @@ paths:
       tags: [선수 비교 및 분석]
       summary: 4.3 승부 예측 (확장)
       operationId: getMatchupPrediction
-      description: 팀 OPS와 ERA에 기반한 결과다. 화면에 참고용임을 표시한다. 판정 기준은 팀 합의 후 확정한다.
+      description: 팀 OPS는 높을수록, ERA는 낮을수록 우세하다. 두 지표의 우세가 일치하거나 한 지표가 동률일 때만 우세 팀을 반환한다. 화면에 참고용임을 표시한다.
       parameters:
         - { $ref: '#/components/parameters/Year' }
         - { name: teamA, in: query, required: true, schema: { type: string }, example: KIA }
@@ -363,6 +364,8 @@ paths:
   /api/admin/imports:
     post:
       tags: [관리자]
+      security:
+        - AdminToken: []
       summary: 5.1 시즌 기록 CSV 적재
       operationId: importSeasonStats
       description: >-
@@ -372,7 +375,7 @@ paths:
         이닝 9 1/3은 28아웃으로, 대시와 빈 값은 null로 변환하고 키·몸무게와 투구손·타격 방향을 각각 분리한다.
         두 파일의 선수를 원본 ID로 통합하고 유형별 선수·시즌당 한 행만 허용한다.
         5.3 검증을 통과한 행의 원천 값과 데이터 출처를 저장한다. 비율은 조회 시 계산한다.
-        CLI 적재만 제공할 경우 이 경로는 생략한다.
+        UTF-8 CSV의 헤더로 항목을 식별한다.
       requestBody:
         required: true
         content:
@@ -404,9 +407,12 @@ paths:
                         row: { type: integer, minimum: 1 }
                         message: { type: string }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
   /api/admin/players/{playerId}/batting-stats/{year}:
     patch:
       tags: [관리자]
+      security:
+        - AdminToken: []
       summary: 5.3 타자 시즌 기록 수정
       operationId: updateBattingStats
       description: >-
@@ -428,10 +434,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/BatterRow' }
         '400': { $ref: '#/components/responses/InvalidRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
   /api/admin/players/{playerId}/pitching-stats/{year}:
     patch:
       tags: [관리자]
+      security:
+        - AdminToken: []
       summary: 5.3 투수 시즌 기록 수정
       operationId: updatePitchingStats
       description: >-
@@ -453,10 +462,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/PitcherRow' }
         '400': { $ref: '#/components/responses/InvalidRecord' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
   /api/admin/players:
     post:
       tags: [관리자]
+      security:
+        - AdminToken: []
       summary: 5.4 선수 등록
       operationId: createPlayer
       description: 원본 선수 ID로 등록한다.
@@ -473,10 +485,13 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Player' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '409': { description: 이미 등록된 선수 ID }
   /api/admin/players/{playerId}:
     patch:
       tags: [관리자]
+      security:
+        - AdminToken: []
       summary: 5.4 선수 기본 정보 수정
       operationId: updatePlayer
       description: 선수 기본 정보를 수정한다. 원본 선수 ID는 유지한다.
@@ -495,8 +510,11 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Player' }
         '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
 components:
+  securitySchemes:
+    AdminToken: { type: http, scheme: bearer }
   parameters:
     Year:
       name: year
@@ -540,13 +558,24 @@ components:
     BattingSort:
       name: sort
       in: query
+      description: 모든 타격 정렬 항목은 값이 높은 순으로 반환한다.
       schema: { type: string, enum: [avg, obp, slg, ops, homeRuns, runsBattedIn, stolenBases] }
     PitchingSort:
       name: sort
       in: query
+      description: ERA와 WHIP는 값이 낮은 순으로, 승·탈삼진·세이브는 값이 높은 순으로 반환한다.
       schema: { type: string, enum: [wins, era, strikeouts, saves, whip] }
   responses:
-    BadRequest: { description: 입력 형식·범위 또는 데이터 검증 규칙 위반 }
+    Forbidden:
+      description: 관리자 접근 권한이 없음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorMessage' }
+    BadRequest:
+      description: 입력 형식·범위 또는 데이터 검증 규칙 위반
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorMessage' }
     InvalidRecord:
       description: 입력 형식·범위 또는 기록 검증 규칙 위반. 위반 내용을 반환한다.
       content:
@@ -557,8 +586,17 @@ components:
             properties:
               message: { type: string }
           example: { message: 타수는 타석 이하여야 합니다. }
-    NotFound: { description: 요청한 리소스가 존재하지 않음 }
+    NotFound:
+      description: 요청한 리소스가 존재하지 않음
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorMessage' }
   schemas:
+    ErrorMessage:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
     Season: { type: integer, minimum: 2015, maximum: 2026 }
     StatType: { type: string, enum: [batter, pitcher] }
     Position: { type: [string, 'null'], enum: [P, C, '1B', '2B', '3B', SS, OF, DH, null], description: 외야수는 OF로 통합한다. }
@@ -574,7 +612,7 @@ components:
       allOf:
         - { $ref: '#/components/schemas/Team' }
         - type: object
-          required: [rank, wins, losses, draws, winningPct, asOfDate]
+          required: [rank, wins, losses, draws, winningPct, asOfDate, games, gamesBehind]
           properties:
             rank: { type: integer, minimum: 1 }
             wins: { type: integer, minimum: 0 }
@@ -582,6 +620,8 @@ components:
             draws: { type: integer, minimum: 0 }
             winningPct: { type: [number, 'null'], minimum: 0, maximum: 1 }
             asOfDate: { type: string, format: date }
+            games: { type: integer, minimum: 0 }
+            gamesBehind: { type: [number, 'null'], minimum: 0 }
     Player:
       type: object
       required: [playerId, playerName, birthDate]
