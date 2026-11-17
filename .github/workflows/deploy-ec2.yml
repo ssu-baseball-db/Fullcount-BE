@@ -2,8 +2,7 @@ name: Deploy backend to EC2
 
 on:
   push:
-    branches: [feat/6-admin-login-deployment]
-    paths: [.github/workflows/deploy-ec2.yml]
+    branches: [develop]
   workflow_dispatch:
 
 concurrency:
@@ -16,7 +15,6 @@ permissions:
 
 jobs:
   deploy:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[ec2-first-run]')
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: ec2-test

@@ -56,9 +56,9 @@
 
 ## 5. GitHub Actions로 이미지 빌드와 배포
 
-발표용 EC2는 GitHub의 **Actions → Deploy backend to EC2 → Run workflow**에서 필요할 때 배포한다. 이 워크플로는 저장소 기본 브랜치에 들어가야 실행 메뉴가 표시된다. 검증한 배포 브랜치를 선택하면 해당 커밋으로 Linux amd64 이미지를 빌드하고, 비공개 ECR에 올린 뒤 다이제스트를 고정해 EC2에 배포한다.
+PR이 `develop`에 머지되거나 `develop`에 직접 푸시되면 워크플로가 실행된다. 반영된 커밋으로 Linux amd64 이미지를 빌드하고, 비공개 ECR에 올린 뒤 다이제스트를 고정해 EC2에 배포한다.
 
-`main`에 반영하기 전 첫 배포 검증은 `feat/6-admin-login-deployment`에서 워크플로 파일을 변경하고 커밋 메시지에 `[ec2-first-run]`을 넣어 푸시하면 실행된다.
+수동 실행이 필요하면 워크플로 파일이 기본 브랜치에 반영된 뒤 GitHub의 **Actions → Deploy backend to EC2 → Run workflow**에서 `ec2-test`에 허용된 브랜치를 선택한다.
 
 ### 최초 설정
 
