@@ -24,6 +24,10 @@ WRITES = {sqlite3.SQLITE_INSERT, sqlite3.SQLITE_UPDATE, sqlite3.SQLITE_DELETE}
 READS = {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_RECURSIVE}
 
 
+# Windows has no SIGALRM. The SQLite progress handler in execute() still enforces the 2-second limit there.
+HAS_ALARM = hasattr(signal, "SIGALRM")
+
+
 class QueryTimeout(Exception):
     pass
 
@@ -111,7 +115,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
             self.respond(400, json_bytes({"message": "SQL을 8KB 이내로 입력해 주세요."}))
             return
 
-        signal.setitimer(signal.ITIMER_REAL, 2)
+        if HAS_ALARM:
+            signal.setitimer(signal.ITIMER_REAL, 2)
         try:
             body = execute(self.server.snapshot, sql)
             status = 200
@@ -125,7 +130,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
         except ValueError as error:
             status, body = 422, json_bytes({"message": str(error)[:512]})
         finally:
-            signal.setitimer(signal.ITIMER_REAL, 0)
+            if HAS_ALARM:
+                signal.setitimer(signal.ITIMER_REAL, 0)
         self.respond(status, body)
 
     def respond(self, status, body):
@@ -137,7 +143,8 @@ class PreviewHandler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    signal.signal(signal.SIGALRM, expire)
+    if HAS_ALARM:
+        signal.signal(signal.SIGALRM, expire)
     server = HTTPServer(("0.0.0.0", 18087), PreviewHandler)
     server.snapshot = Path(sys.argv[1]).resolve(strict=True).as_uri() + "?mode=ro&immutable=1"
     server.serve_forever()

@@ -13,6 +13,7 @@
 ├── gradle/         # Gradle Wrapper 설정
 ├── build.gradle    # 의존성과 빌드 설정
 ├── run-local.sh    # 로컬 일괄 실행 스크립트 (요약·SQL 시연·백엔드)
+├── run-local.ps1   # run-local.sh의 Windows PowerShell판
 └── README.md       # 실행 방법과 협업 컨벤션
 ```
 
@@ -44,6 +45,12 @@ DB 초기화는 최초 한 번 실행한다. 초기화 시 공식 팀 순위 120
 ```bash
 chmod +x run-local.sh   # 최초 한 번
 ./run-local.sh
+```
+
+Windows에서는 PowerShell로 같은 순서를 실행하는 `run-local.ps1`을 쓴다. 로그는 `%TEMP%\fullcount-*.log`에 남는다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-local.ps1
 ```
 
 관리자 로그인을 쓰려면 백엔드 루트 `.env`에 `FULLCOUNT_ADMIN_USERNAME`과 `FULLCOUNT_ADMIN_PASSWORD_HASH`를 넣는다. 해시는 [관리자 시연 안내](docs/admin-demo.md)의 방법으로 만든다. 스크립트는 `.env`를 읽고, 로컬 HTTP에서 세션 쿠키가 저장되도록 `SERVER_SERVLET_SESSION_COOKIE_SECURE=false`를 적용한다.
