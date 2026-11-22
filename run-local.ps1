@@ -29,7 +29,8 @@ function Find-Python {
     if (-not (Get-Command $exe -ErrorAction SilentlyContinue)) { continue }
     try {
       $version = & $exe @prefix --version 2>&1 | Out-String
-      if ($version -match 'Python 3\.') { return @{ Exe = $exe; Prefix = $prefix } }
+      # SQL 시연(db\sql_preview.py)이 Python 3.11 부터 있는 sqlite3 기능을 쓴다
+      if ($version -match 'Python 3\.(\d+)' -and [int]$Matches[1] -ge 11) { return @{ Exe = $exe; Prefix = $prefix } }
     } catch { }
   }
   return $null
@@ -75,7 +76,7 @@ if (-not $env:SERVER_SERVLET_SESSION_COOKIE_SECURE) { $env:SERVER_SERVLET_SESSIO
 
 $python = Find-Python
 if (-not $python) {
-  Write-Step "Python 3 를 찾지 못했습니다. https://www.python.org/downloads/ 에서 설치해 주세요."
+  Write-Step "Python 3.11 이상을 찾지 못했습니다. https://www.python.org/downloads/ 에서 설치해 주세요."
   exit 1
 }
 $py = $python.Exe

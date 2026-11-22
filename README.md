@@ -38,7 +38,7 @@ DB 초기화는 최초 한 번 실행한다. 초기화 시 공식 팀 순위 120
 
 #### 경기 요약 로컬 테스트
 
-팀 노션에서 받은 `fullcount.db`를 백엔드 루트의 `data/fullcount.db`에 배치한다. JDK 21, Python 3, Ollama가 필요하다. Ollama를 기본 주소 `127.0.0.1:11434`에서 실행하고 `ollama pull qwen2.5:1.5b`로 모델을 받는다. 첫 실행 전에 `ollama run qwen2.5:1.5b "안녕"`으로 모델을 준비하면 생성 타임아웃을 줄일 수 있다.
+팀 노션에서 받은 `fullcount.db`를 백엔드 루트의 `data/fullcount.db`에 배치한다. JDK 21, Python 3.11 이상, Ollama가 필요하다. Ollama를 기본 주소 `127.0.0.1:11434`에서 실행하고 `ollama pull qwen2.5:1.5b`로 모델을 받는다. 첫 실행 전에 `ollama run qwen2.5:1.5b "안녕"`으로 모델을 준비하면 생성 타임아웃을 줄일 수 있다.
 
 백엔드 루트에서 실행 스크립트를 실행한다.
 

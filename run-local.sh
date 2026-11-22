@@ -5,16 +5,25 @@
 # Ctrl+C 한 번으로 이 스크립트가 켠 프로세스를 모두 종료한다.
 cd "$(dirname "$0")" || exit 1
 
-if lsof -nP -iTCP:8080 -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "[run-local] 8080 포트를 이미 다른 프로세스가 사용 중입니다. 먼저 종료해 주세요: lsof -nP -iTCP:8080 -sTCP:LISTEN"
+for port in 8080 18085 18086 18087; do
+  if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "[run-local] $port 포트를 이미 다른 프로세스가 사용 중입니다. 먼저 종료해 주세요: lsof -nP -iTCP:$port -sTCP:LISTEN"
+    exit 1
+  fi
+done
+
+# SQL 시연(db/sql_preview.py)이 Python 3.11 부터 있는 sqlite3 기능을 쓴다
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  echo "[run-local] Python 3.11 이상이 필요합니다. 현재: $(python3 --version 2>&1 || echo '없음')"
   exit 1
 fi
 
 if [ -f .env ]; then
   set -a; source .env; set +a
 fi
-if [ -z "$FULLCOUNT_ADMIN_USERNAME" ] || [ -z "$FULLCOUNT_ADMIN_PASSWORD_HASH" ]; then
-  echo "[run-local] 경고: .env 에 FULLCOUNT_ADMIN_USERNAME, FULLCOUNT_ADMIN_PASSWORD_HASH 가 없어 관리자 로그인이 되지 않습니다."
+if ! grep -qs '^fullcount\.admin\.username=.' config/application.properties \
+  && { [ -z "$FULLCOUNT_ADMIN_USERNAME" ] || [ -z "$FULLCOUNT_ADMIN_PASSWORD_HASH" ]; }; then
+  echo "[run-local] 경고: 관리자 계정 설정이 없어 관리자 로그인이 되지 않습니다 (config/application.properties 또는 .env)."
 fi
 # 로컬은 HTTP 이므로 세션 쿠키의 Secure 속성을 끈다 (EC2 HTTPS 에서는 설정하지 않는다)
 export SERVER_SERVLET_SESSION_COOKIE_SECURE="${SERVER_SERVLET_SESSION_COOKIE_SECURE:-false}"
@@ -51,4 +60,4 @@ echo "[run-local] 백엔드 시작: http://localhost:8080/swagger-ui/index.html"
 FULLCOUNT_GAME_DETAIL_URL='http://127.0.0.1:18085/games/{gameId}' \
 FULLCOUNT_SUMMARY_URL=http://127.0.0.1:18086/summary \
 FULLCOUNT_SQL_PREVIEW_URL=http://127.0.0.1:18087/preview \
-./gradlew bootRun
+sh ./gradlew bootRun   # ZIP 해제로 실행 권한이 빠져도 동작하도록 sh 로 실행한다
